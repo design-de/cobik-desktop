@@ -87,7 +87,15 @@ function createWindow() {
     },
   });
   win.contentView.addChildView(panelView);
-  panelView.webContents.loadFile(path.join(__dirname, 'panel', 'index.html'));
+  // แผงเป็นหน้าของเว็บแล้ว (ได้ระบบดีไซน์ + tr() + cookie session)
+  // ไฟล์ src/panel/ เดิมเก็บไว้เป็นทางสำรองตอนเว็บล่ม
+  panelView.webContents.loadURL(`${TARGET}/desktop/panel`);
+  panelView.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    if (url.includes('/desktop/panel')) {
+      console.warn('โหลดแผงจากเว็บไม่สำเร็จ → ใช้แผงสำรองในเครื่อง:', code, desc);
+      panelView.webContents.loadFile(path.join(__dirname, 'panel', 'index.html'));
+    }
+  });
 
   layout();
   win.on('resize', layout);
