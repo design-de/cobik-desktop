@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8" />
+<title>Cobik</title>
+<style>
+  :root {
+    --bg: #17171a; --raised: #1f1f23; --line: #2e2e34;
+    --ink: #ececef; --ink-soft: #a6a6ae; --ink-mute: #74747d;
+    --accent: #4f7cff; --ok: #3fb950; --err: #f06a5d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; display: flex; flex-direction: column;
+    background: var(--bg); color: var(--ink);
+    font: 13px/1.55 -apple-system, "SF Pro Text", "IBM Plex Sans Thai", sans-serif;
+    border-left: 1px solid var(--line);
+  }
+  header {
+    -webkit-app-region: drag;
+    padding: 10px 14px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--ink-mute); flex-shrink: 0; }
+  .dot.on { background: var(--ok); }
+  .dot.bad { background: var(--err); }
+  h1 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: .2px; }
+  .ctx { font-size: 11px; color: var(--ink-mute); margin-left: auto; -webkit-app-region: no-drag;
+         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+  main { flex: 1; overflow-y: auto; padding: 14px; }
+  .card { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
+  .card h2 { font-size: 11px; font-weight: 600; color: var(--ink-soft); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .6px; }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 12px; }
+  .row span:last-child { color: var(--ink-soft); text-align: right; word-break: break-all; }
+  footer { padding: 12px 14px; border-top: 1px solid var(--line); flex-shrink: 0; }
+  textarea {
+    width: 100%; min-height: 62px; resize: vertical; padding: 9px 11px;
+    background: var(--raised); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 9px; font: inherit;
+  }
+  textarea:focus { outline: none; border-color: var(--accent); }
+  .hint { font-size: 11px; color: var(--ink-mute); margin-top: 7px; }
+  button {
+    font: inherit; padding: 5px 11px; border-radius: 7px; cursor: pointer;
+    background: var(--raised); color: var(--ink); border: 1px solid var(--line);
+  }
+  button:hover { border-color: var(--accent); }
+</style>
+</head>
+<body>
+  <header>
+    <span class="dot" id="dot"></span>
+    <h1>Cobik</h1>
+    <span class="ctx" id="ctx">—</span>
+  </header>
+
+  <main>
+    <div class="card">
+      <h2>สถานะเปลือก</h2>
+      <div class="row"><span>สะพาน</span><span id="s-bridge">…</span></div>
+      <div class="row"><span>เว็บ</span><span id="s-target">…</span></div>
+      <div class="row"><span>หน้าที่เปิดอยู่</span><span id="s-url">…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>ทดสอบสะพาน</h2>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button id="b-home">ไปหน้าแรก</button>
+        <button id="b-projects">ไปหน้าโปรเจกต์</button>
+        <button id="b-reload">โหลดซ้ำ</button>
+        <button id="b-wide">กว้างขึ้น</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <textarea id="input" placeholder="ถาม Claude เรื่องงานนี้… (ยังไม่ต่อ — ขั้นถัดไป)" disabled></textarea>
+    <div class="hint">ขั้นถัดไป: ต่อ Claude Agent SDK + OAuth เข้า Cowork</div>
+  </footer>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const short = (u) => { try { const x = new URL(u); return x.pathname + x.search; } catch { return u || '—'; } };
+
+  (async () => {
+    if (!window.cobik) { $('dot').className = 'dot bad'; $('s-bridge').textContent = 'ไม่พบสะพาน'; return; }
+    const st = await window.cobik.getState();
+    $('dot').className = 'dot on';
+    $('s-bridge').textContent = 'v' + st.bridgeVersion;
+    $('s-target').textContent = new URL(st.target).host;
+    $('s-url').textContent = short(st.webUrl);
+    $('ctx').textContent = short(st.webUrl);
+
+    window.cobik.onWebUrl((url) => {
+      $('s-url').textContent = short(url);
+      $('ctx').textContent = short(url);
+    });
+
+    $('b-home').onclick = () => window.cobik.navigate('/');
+    $('b-projects').onclick = () => window.cobik.navigate('/projects');
+    $('b-reload').onclick = () => window.cobik.reloadWeb();
+    let w = 420;
+    $('b-wide').onclick = async () => { w = w >= 700 ? 420 : w + 140; w = await window.cobik.setPanelWidth(w); };
+  })();
+</script>
+</body>
+</html>
