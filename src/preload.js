@@ -36,6 +36,7 @@ contextBridge.exposeInMainWorld('cobik', {
   pickFiles: () => ipcRenderer.invoke('cobik:pick-files'),
 
   // ── คุยกับ Claude ──
+  warmup: () => ipcRenderer.invoke('cobik:warmup'),
   ask: (prompt, context, model, effort) => ipcRenderer.invoke('cobik:ask', { prompt, context, model, effort }),
   stop: () => ipcRenderer.invoke('cobik:stop'),
   newChat: () => ipcRenderer.invoke('cobik:new-chat'),

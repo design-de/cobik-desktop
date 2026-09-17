@@ -168,6 +168,20 @@ ipcMain.handle('cobik:ask', async (_e, { prompt, context, model, effort }) => {
   }
 });
 
+// เปิด session ค้างไว้เพื่อถามรายชื่อโมเดลของบัญชีนี้ (ไม่เสียเงิน — จ่ายตอนส่งข้อความ)
+ipcMain.handle('cobik:warmup', async () => {
+  try {
+    const rec = await oauth.connect(TARGET, { interactive: false });
+    if (!rec) return { ok: false, error: 'not_connected' };
+    const r = await agent.warmup('main', {
+      base: TARGET, token: rec.access_token, folders, onEvent: toPanel,
+    });
+    return { ok: true, ...r };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+});
+
 ipcMain.handle('cobik:stop', () => agent.stop('main'));
 ipcMain.handle('cobik:new-chat', () => { agent.reset('main'); return true; });
 ipcMain.handle('cobik:agent-state', () => agent.state('main'));

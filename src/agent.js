@@ -167,6 +167,18 @@ async function models(roomId = 'main') {
   try { return await room.q.supportedModels(); } catch { return []; }
 }
 
+/**
+ * เปิดห้องค้างไว้เฉย ๆ เพื่อถามว่าบัญชีนี้ใช้โมเดลอะไรได้บ้าง
+ * ไม่เสียเงิน — ค่าใช้จ่ายเกิดตอนส่งข้อความ ไม่ใช่ตอนเปิด session
+ */
+async function warmup(roomId, opts) {
+  open(roomId, opts);
+  const room = rooms.get(roomId);
+  // รอ init สักครู่ให้ CLI พร้อมก่อนถามรายชื่อโมเดล
+  for (let i = 0; i < 40 && !room.sessionId; i++) await new Promise((r) => setTimeout(r, 150));
+  return { models: await models(roomId), state: state(roomId) };
+}
+
 /** ปิดห้อง — เริ่มบทสนทนาใหม่ */
 function reset(roomId = 'main') {
   const room = rooms.get(roomId);
@@ -185,4 +197,4 @@ function state(roomId = 'main') {
   };
 }
 
-module.exports = { send, stop, reset, setModel, models, state, DEFAULT_MODEL, DEFAULT_EFFORT };
+module.exports = { send, stop, reset, setModel, models, warmup, state, DEFAULT_MODEL, DEFAULT_EFFORT };

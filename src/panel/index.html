@@ -8,6 +8,7 @@
     --bg:#17171a; --raised:#1f1f23; --raised-2:#26262c; --line:#2e2e34; --line-soft:#26262b;
     --ink:#ececef; --ink-soft:#a6a6ae; --ink-mute:#74747d;
     --accent:#4f7cff; --ok:#3fb950; --err:#f06a5d; --warn:#d9a441;
+    --r:9px; --r-lg:11px;
   }
   * { box-sizing:border-box; }
   body {
@@ -17,34 +18,66 @@
     border-left:1px solid var(--line);
   }
   button { font:inherit; cursor:pointer; }
+  .ic { display:block; flex-shrink:0; }
+  .ico { display:inline-flex; align-items:center; flex-shrink:0; }
 
   header { -webkit-app-region:drag; padding:10px 14px; border-bottom:1px solid var(--line);
            display:flex; align-items:center; gap:8px; flex-shrink:0; }
   .dot { width:7px; height:7px; border-radius:99px; background:var(--ink-mute); flex-shrink:0; }
-  .dot.on{background:var(--ok)} .dot.bad{background:var(--err)} .dot.busy{background:var(--warn)}
+  .dot.on{background:var(--ok)} .dot.bad{background:var(--err)}
+  .dot.busy{background:var(--warn); animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse { 0%,100%{opacity:1; transform:scale(1)} 50%{opacity:.35; transform:scale(.8)} }
   h1 { font-size:13px; font-weight:600; margin:0; }
   .ctx { font-size:11px; color:var(--ink-mute); margin-left:auto; -webkit-app-region:no-drag;
          white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:50%; }
-  .hbtn { -webkit-app-region:no-drag; font-size:11px; padding:2px 8px; border-radius:6px;
-          background:transparent; color:var(--ink-mute); border:1px solid var(--line); }
+  .hbtn { -webkit-app-region:no-drag; font-size:11px; padding:3px 8px; border-radius:6px;
+          background:transparent; color:var(--ink-mute); border:1px solid var(--line);
+          display:inline-flex; align-items:center; gap:4px; }
   .hbtn:hover { color:var(--ink); border-color:var(--accent); }
 
   main { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:9px; }
   main::-webkit-scrollbar{width:8px} main::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
 
-  .msg { max-width:92%; padding:8px 11px; border-radius:11px; white-space:pre-wrap; word-break:break-word; }
+  .msg { max-width:92%; padding:8px 11px; border-radius:var(--r-lg); white-space:pre-wrap; word-break:break-word; }
   .me { align-self:flex-end; background:var(--accent); color:#fff; }
   .ai { align-self:flex-start; background:var(--raised); border:1px solid var(--line-soft); }
-  .ai.streaming::after { content:'▍'; opacity:.6; animation:blink 1s steps(2) infinite; }
-  @keyframes blink { 50%{opacity:0} }
-
-  .think { align-self:flex-start; max-width:92%; font-size:11.5px; color:var(--ink-mute);
-           border-left:2px solid var(--line); padding:2px 0 2px 9px; white-space:pre-wrap; font-style:italic; }
-  .tool { align-self:flex-start; font-size:11px; color:var(--ink-mute); display:flex; gap:6px;
-          align-items:baseline; max-width:92%; }
-  .tool code { background:var(--raised); padding:1px 6px; border-radius:5px; color:var(--ink-soft); font-size:10.5px; }
-  .tool.err { color:var(--err); }
+  .ai.streaming::after { content:'▍'; opacity:.55; animation:caret 1s steps(2) infinite; }
+  @keyframes caret { 50%{opacity:0} }
   .note { font-size:11px; color:var(--ink-mute); text-align:center; padding:3px 0; }
+
+  /* ── กำลังคิด ── */
+  .thinking { align-self:flex-start; display:flex; align-items:center; gap:7px;
+              font-size:12px; color:var(--ink-mute); padding:3px 2px; }
+  .thinking .sh {
+    background:linear-gradient(90deg,var(--ink-mute) 20%,var(--ink) 45%,var(--ink-mute) 70%);
+    background-size:220% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:shimmer 1.9s linear infinite;
+  }
+  @keyframes shimmer { to { background-position:-220% 0 } }
+  .thinking .ico { animation:spin 2.4s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg) } }
+
+  /* ── บล็อกงาน (หุบ/ขยายได้) ── */
+  .run { align-self:flex-start; width:92%; border:1px solid var(--line-soft);
+         background:var(--raised); border-radius:var(--r-lg); overflow:hidden; }
+  .run-head, .grp-head {
+    display:flex; align-items:center; gap:7px; width:100%; padding:7px 10px;
+    background:none; border:none; color:var(--ink-soft); text-align:left; font-size:12px;
+  }
+  .run-head:hover, .grp-head:hover { background:rgba(255,255,255,.04); }
+  .run-head .chev, .grp-head .chev { color:var(--ink-mute); transition:transform .15s ease; }
+  .run.open > .run-head .chev, .grp.open > .grp-head .chev { transform:rotate(90deg); }
+  .run-head .t { color:var(--ink-mute); font-size:11px; margin-left:auto; }
+  .run-body { display:none; padding:0 0 5px; }
+  .run.open > .run-body { display:block; }
+
+  .grp { border-top:1px solid var(--line-soft); }
+  .grp-head { padding-left:20px; font-size:11.5px; }
+  .grp-body { display:none; padding:1px 0 5px 42px; }
+  .grp.open > .grp-body { display:block; }
+  .step { font-size:11px; color:var(--ink-mute); padding:2.5px 0; display:flex; gap:6px; align-items:baseline; }
+  .step .nm { color:var(--ink-soft); }
+  .step.err .nm { color:var(--err); }
 
   .empty { margin:auto; text-align:center; color:var(--ink-mute); font-size:12px; line-height:1.9; }
   .empty b { color:var(--ink-soft); font-weight:600; display:block; margin-bottom:6px; font-size:13px; }
@@ -52,49 +85,49 @@
                border-radius:99px; cursor:pointer; color:var(--ink-soft); }
   .empty .ex:hover { border-color:var(--accent); color:var(--ink); }
 
-  .connect { background:var(--raised); border:1px solid var(--line); border-radius:11px; padding:16px; text-align:center; }
+  .connect { background:var(--raised); border:1px solid var(--line); border-radius:var(--r-lg); padding:16px; text-align:center; }
   .connect p { margin:0 0 12px; color:var(--ink-soft); font-size:12px; line-height:1.7; }
   .primary { font-weight:600; padding:7px 16px; border-radius:8px; border:none; background:var(--accent); color:#fff; }
 
   /* ── ช่องพิมพ์ ── */
   footer { border-top:1px solid var(--line); flex-shrink:0; padding:9px 12px 10px; position:relative; }
   .chips { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:7px; }
+  .chips:empty { display:none; }
   .chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:3px 7px;
           background:var(--raised); border:1px solid var(--line); border-radius:7px; color:var(--ink-soft); }
-  .chip button { background:none; border:none; color:var(--ink-mute); padding:0 1px; font-size:13px; line-height:1; }
+  .chip button { background:none; border:none; color:var(--ink-mute); padding:0; display:flex; }
   .chip button:hover { color:var(--err); }
 
-  textarea {
-    width:100%; min-height:34px; max-height:160px; resize:none; padding:7px 2px;
-    background:transparent; color:var(--ink); border:none; font:inherit;
-  }
+  textarea { width:100%; min-height:34px; max-height:160px; resize:none; padding:7px 2px;
+             background:transparent; color:var(--ink); border:none; font:inherit; }
   textarea:focus { outline:none; }
   textarea::placeholder { color:var(--ink-mute); }
 
-  .bar { display:flex; align-items:center; gap:6px; margin-top:4px; }
-  .pill { font-size:11.5px; padding:3px 9px; border-radius:7px; background:transparent;
+  .bar { display:flex; align-items:center; gap:5px; margin-top:4px; }
+  .pill { font-size:11.5px; padding:3px 8px; border-radius:7px; background:transparent;
           border:1px solid transparent; color:var(--ink-soft); display:inline-flex; align-items:center; gap:5px; }
   .pill:hover { background:var(--raised); }
   .spacer { margin-left:auto; }
   .icon-btn { width:28px; height:28px; border-radius:8px; border:1px solid var(--line);
-              background:var(--raised); color:var(--ink-soft); display:grid; place-items:center; font-size:15px; }
+              background:var(--raised); color:var(--ink-soft); display:grid; place-items:center; }
   .icon-btn:hover { border-color:var(--accent); color:var(--ink); }
   .icon-btn.go { background:var(--accent); border-color:var(--accent); color:#fff; }
   .icon-btn.stop { background:var(--err); border-color:var(--err); color:#fff; }
 
-  /* ── เมนู + ── */
-  .menu { position:absolute; bottom:52px; right:12px; min-width:230px; z-index:20;
-          background:var(--raised-2); border:1px solid var(--line); border-radius:11px;
+  .menu { position:absolute; bottom:52px; right:12px; min-width:236px; max-height:60vh; overflow-y:auto;
+          z-index:20; background:var(--raised-2); border:1px solid var(--line); border-radius:var(--r-lg);
           padding:5px; box-shadow:0 12px 34px rgba(0,0,0,.5); }
   .menu[hidden] { display:none; }
-  .mi { display:flex; align-items:center; gap:10px; width:100%; padding:7px 10px; border-radius:8px;
+  .mi { display:flex; align-items:center; gap:9px; width:100%; padding:7px 10px; border-radius:8px;
         background:none; border:none; color:var(--ink); text-align:left; font-size:12.5px; }
-  .mi:hover { background:rgba(255,255,255,.06); }
-  .mi .k { margin-left:auto; color:var(--ink-mute); font-size:11px; }
+  .mi:hover:not(:disabled) { background:rgba(255,255,255,.06); }
+  .mi .k { margin-left:auto; color:var(--ink-mute); font-size:11px; display:flex; align-items:center; gap:5px; }
   .mi:disabled { color:var(--ink-mute); cursor:default; }
-  .mi:disabled:hover { background:none; }
+  .mi .sub { color:var(--ink-mute); font-size:11px; }
   .msep { height:1px; background:var(--line); margin:5px 2px; }
   .mhead { font-size:10.5px; color:var(--ink-mute); padding:6px 10px 3px; text-transform:uppercase; letter-spacing:.5px; }
+  .sdot { width:6px; height:6px; border-radius:99px; flex-shrink:0; }
+  .sdot.on{background:var(--ok)} .sdot.off{background:var(--ink-mute)}
 
   .foot-note { font-size:10.5px; color:var(--ink-mute); margin-top:6px; display:flex; justify-content:space-between; gap:8px; }
 </style>
@@ -111,47 +144,67 @@
 
   <footer>
     <div class="menu" id="menu" hidden></div>
-
     <div class="chips" id="chips"></div>
-    <textarea id="input" rows="1" placeholder="ถามหรือสั่งงาน… / สำหรับ skill, @ สำหรับไฟล์"></textarea>
-
+    <textarea id="input" rows="1" placeholder="ถามหรือสั่งงาน…"></textarea>
     <div class="bar">
-      <button class="pill" id="p-model">✳︎ <span id="model-name">Opus 5</span></button>
+      <button class="pill" id="p-model"><span id="model-name">Opus 5</span></button>
       <button class="pill" id="p-effort"><span id="effort-name">High</span></button>
       <span class="spacer"></span>
-      <button class="icon-btn" id="b-plus" title="แนบไฟล์ / โฟลเดอร์ / skill">＋</button>
-      <button class="icon-btn go" id="b-send" title="ส่ง (Enter)">↑</button>
+      <button class="icon-btn" id="b-plus" title="แนบไฟล์ / โฟลเดอร์ / skill"></button>
+      <button class="icon-btn go" id="b-send" title="ส่ง (Enter)"></button>
     </div>
-
-    <div class="foot-note">
-      <span id="tools">—</span>
-      <span id="cost"></span>
-    </div>
+    <div class="foot-note"><span id="tools">—</span><span id="cost"></span></div>
   </footer>
 
-<script>
+<script type="module">
+import { icon } from './icons.js';
+
 const $ = (id) => document.getElementById(id);
 const log = $('log'), input = $('input'), menu = $('menu');
 let webUrl = '', busy = false, connected = false, totalCost = 0;
 let folders = [], attached = [], servers = [];
-let model = 'claude-opus-5', effort = 'high';
-let streamEl = null, thinkEl = null;
+let model = 'claude-opus-5', modelLabel = 'Opus 5', effort = 'high';
+let modelList = [];
+let streamEl = null, thinkEl = null, run = null, startedAt = 0, tick = null;
 
-const MODELS = [
-  { id: 'claude-opus-5',   label: 'Opus 5',   note: 'ฉลาดที่สุด' },
-  { id: 'claude-sonnet-5', label: 'Sonnet 5', note: 'เร็ว ถูกกว่า' },
-  { id: 'claude-haiku-4-5',label: 'Haiku 4.5',note: 'เร็วที่สุด งานง่าย' },
-];
 const EFFORTS = [
-  { id: 'low',    label: 'Low',    note: 'ตอบไว ไม่คิดมาก' },
-  { id: 'medium', label: 'Medium', note: '' },
-  { id: 'high',   label: 'High',   note: 'สมดุล (แนะนำ)' },
-  { id: 'xhigh',  label: 'X-High', note: 'คิดหนัก งานยาก' },
-  { id: 'max',    label: 'Max',    note: 'คิดหนักที่สุด ช้าและแพง' },
+  { id:'low', label:'Low', note:'ตอบไว ไม่คิดมาก' },
+  { id:'medium', label:'Medium', note:'' },
+  { id:'high', label:'High', note:'สมดุล' },
+  { id:'xhigh', label:'X-High', note:'คิดหนัก งานยาก' },
+  { id:'max', label:'Max', note:'คิดหนักสุด ช้าและแพง' },
 ];
+
+// ── ชื่อเครื่องมือเป็นภาษาคน + จัดกลุ่ม ──
+const TOOL_TH = {
+  list_projects:'ดูรายการโปรเจกต์', list_project_tasks:'ดูงานในโปรเจกต์', list_all_tasks:'ดูงานทั้งหมด',
+  list_my_tasks:'ดูงานของฉัน', list_stages:'ดูช่วงงาน', list_people:'ดูรายชื่อทีม',
+  list_project_directory:'ดู Directory', whats_overdue:'หางานที่เลยกำหนด', who_is_free:'ดูว่าใครว่าง',
+  project_health:'ดูสุขภาพโปรเจกต์', capacity_report:'ดูภาระงานทีม', read_activity:'อ่านประวัติการแก้',
+  project_deep_dive:'เจาะลึกโปรเจกต์', portfolio_pulse:'ดูภาพรวมทั้งพอร์ต', estimate_accuracy:'เทียบเวลาที่ประเมิน',
+  get_me:'ดูว่าฉันเป็นใคร',
+  create_task:'สร้างงาน', create_tasks:'สร้างงานหลายชิ้น', update_task:'แก้งาน', update_tasks:'แก้งานหลายชิ้น',
+  assign_task:'มอบหมายงาน', assign_tasks:'มอบหมายงานหลายชิ้น', unassign_task:'ถอนมอบหมาย',
+  rename_tasks:'เปลี่ยนชื่องาน', shift_dates:'เลื่อนวัน', reassign_work:'ย้ายงานให้คนอื่น',
+  create_stage:'สร้างช่วงงาน', update_stage:'แก้ช่วงงาน', merge_stage:'รวมช่วงงาน',
+  reorder_stages:'จัดลำดับช่วงงาน', apply_stage_template:'ใช้แม่แบบช่วงงาน',
+  Bash:'รันคำสั่ง', Read:'อ่านไฟล์', Write:'เขียนไฟล์', Edit:'แก้ไฟล์',
+  Glob:'หาไฟล์', Grep:'ค้นในไฟล์', WebSearch:'ค้นเว็บ', WebFetch:'เปิดเว็บ', ToolSearch:'หาเครื่องมือ',
+};
+const GROUPS = [
+  { id:'write', label:'แก้ข้อมูล', icon:'pencil',
+    test:(n)=>/^(create|update|assign|unassign|rename|shift|reassign|merge|reorder|apply|delete|restore)/.test(n) },
+  { id:'file',  label:'แตะไฟล์', icon:'fileText', test:(n)=>/^(Write|Edit|NotebookEdit)$/.test(n) },
+  { id:'cmd',   label:'รันคำสั่ง', icon:'terminal', test:(n)=>/^Bash$/.test(n) },
+  { id:'read',  label:'ดูข้อมูล', icon:'search', test:()=>true },
+];
+const cleanName = (n) => String(n).replace(/^mcp__[a-z_]+__/i, '');
+const thName = (n) => { const c = cleanName(n); return TOOL_TH[c] || c; };
+const groupOf = (n) => GROUPS.find((g) => g.test(cleanName(n))) || GROUPS[3];
 
 const short = (u) => { try { const x = new URL(u); return x.pathname + x.search; } catch { return u || '—'; } };
-const base = (p) => p.split('/').filter(Boolean).pop() || p;
+const baseName = (p) => p.split('/').filter(Boolean).pop() || p;
+const dur = (ms) => { const s = Math.round(ms/1000); return s < 60 ? s + ' วิ' : Math.floor(s/60) + ' นาที ' + (s%60) + ' วิ'; };
 const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 70;
 const toBottom = () => { log.scrollTop = log.scrollHeight; };
 
@@ -163,16 +216,71 @@ function add(cls, text) {
   return d;
 }
 
-function addTool(name, args) {
+// ── บล็อกงาน: หุบได้ · จัดกลุ่ม · มีเวลา ──
+function newRun() {
   const stick = atBottom();
-  const d = document.createElement('div');
-  d.className = 'tool';
-  d.innerHTML = '⚙︎ <code></code><span></span>';
-  d.querySelector('code').textContent = String(name).replace(/^mcp__cobik__/, '');
-  d.querySelector('span').textContent = args && Object.keys(args).length ? JSON.stringify(args).slice(0, 70) : '';
-  log.appendChild(d); if (stick) toBottom();
-  return d;
+  const el = document.createElement('div');
+  el.className = 'run open';
+  el.innerHTML = `<button class="run-head">
+      <span class="chev">${icon('chevronRight', 13)}</span>
+      <span class="label">กำลังทำงาน</span><span class="t"></span>
+    </button><div class="run-body"></div>`;
+  el.querySelector('.run-head').onclick = () => el.classList.toggle('open');
+  log.appendChild(el); if (stick) toBottom();
+  return { el, body: el.querySelector('.run-body'), label: el.querySelector('.label'),
+           time: el.querySelector('.t'), groups: new Map(), count: 0 };
 }
+
+function runStep(name, isError) {
+  if (!run) run = newRun();
+  const g = groupOf(name);
+  let grp = run.groups.get(g.id);
+  if (!grp) {
+    const el = document.createElement('div');
+    el.className = 'grp';
+    el.innerHTML = `<button class="grp-head">
+        <span class="chev">${icon('chevronRight', 12)}</span>
+        <span class="ico">${icon(g.icon, 13)}</span><span class="gl"></span>
+      </button><div class="grp-body"></div>`;
+    el.querySelector('.grp-head').onclick = () => el.classList.toggle('open');
+    run.body.appendChild(el);
+    grp = { el, body: el.querySelector('.grp-body'), label: el.querySelector('.gl'), n: 0, def: g };
+    run.groups.set(g.id, grp);
+  }
+  grp.n++; run.count++;
+  grp.label.textContent = `${g.label} ${grp.n} รายการ`;
+  const s = document.createElement('div');
+  s.className = 'step' + (isError ? ' err' : '');
+  s.innerHTML = `<span class="nm"></span>`;
+  s.querySelector('.nm').textContent = thName(name);
+  grp.body.appendChild(s);
+  if (atBottom()) toBottom();
+}
+
+function runTicking() {
+  if (!run) return;
+  run.time.textContent = dur(Date.now() - startedAt);
+}
+
+function runFinish() {
+  if (!run) return;
+  run.label.textContent = run.count ? `ทำงาน ${run.count} ขั้น` : 'ทำงาน';
+  run.time.textContent = dur(Date.now() - startedAt);
+  run.el.classList.remove('open');   // จบแล้วหุบเอง — กดกางดูย้อนได้
+  run = null;
+}
+
+function showThinking(text) {
+  if (!thinkEl) {
+    const stick = atBottom();
+    thinkEl = document.createElement('div');
+    thinkEl.className = 'thinking';
+    thinkEl.innerHTML = `<span class="ico">${icon('sparkles', 13)}</span><span class="sh">กำลังคิด…</span>`;
+    log.appendChild(thinkEl); if (stick) toBottom();
+  }
+  if (text) thinkEl.querySelector('.sh').textContent = text;
+}
+function hideThinking() { thinkEl?.remove(); thinkEl = null; }
 
 function setDot() { $('dot').className = 'dot' + (busy ? ' busy' : connected ? ' on' : ' bad'); }
 
@@ -180,28 +288,26 @@ function setBusy(b) {
   busy = b; setDot();
   const btn = $('b-send');
   btn.className = 'icon-btn ' + (b ? 'stop' : 'go');
-  btn.textContent = b ? '■' : '↑';
+  btn.innerHTML = icon(b ? 'square' : 'arrowUp', b ? 11 : 15);
   btn.title = b ? 'หยุด' : 'ส่ง (Enter)';
+  if (b) { startedAt = Date.now(); tick = setInterval(runTicking, 1000); }
+  else { clearInterval(tick); tick = null; hideThinking(); runFinish(); }
 }
 
 function renderChips() {
   const c = $('chips'); c.innerHTML = '';
-  folders.forEach((p) => {
-    const s = document.createElement('span'); s.className = 'chip';
-    s.innerHTML = '📁 <span></span><button title="เอาออก">×</button>';
-    s.querySelector('span').textContent = base(p);
-    s.title = p;
-    s.querySelector('button').onclick = async () => { folders = await window.cobik.folders.remove(p); renderChips(); add('note','เปลี่ยนโฟลเดอร์แล้ว — บทสนทนาเริ่มใหม่'); };
+  const chip = (ic, label, title, onX) => {
+    const s = document.createElement('span'); s.className = 'chip'; s.title = title;
+    s.innerHTML = `<span class="ico">${icon(ic, 12)}</span><span></span><button>${icon('x', 12)}</button>`;
+    s.querySelector('span:nth-child(2)').textContent = label;
+    s.querySelector('button').onclick = onX;
     c.appendChild(s);
-  });
-  attached.forEach((p, i) => {
-    const s = document.createElement('span'); s.className = 'chip';
-    s.innerHTML = '📎 <span></span><button title="เอาออก">×</button>';
-    s.querySelector('span').textContent = base(p);
-    s.title = p;
-    s.querySelector('button').onclick = () => { attached.splice(i, 1); renderChips(); };
-    c.appendChild(s);
-  });
+  };
+  folders.forEach((p) => chip('folder', baseName(p), p, async () => {
+    folders = await window.cobik.folders.remove(p); renderChips();
+    add('note', 'เปลี่ยนโฟลเดอร์แล้ว — บทสนทนาเริ่มใหม่');
+  }));
+  attached.forEach((p, i) => chip('paperclip', baseName(p), p, () => { attached.splice(i,1); renderChips(); }));
 }
 
 // ── เมนู ──
@@ -209,14 +315,18 @@ function closeMenu() { menu.hidden = true; menu.innerHTML = ''; }
 function openMenu(items) {
   menu.innerHTML = '';
   items.forEach((it) => {
-    if (it.sep) { const d = document.createElement('div'); d.className = 'msep'; menu.appendChild(d); return; }
-    if (it.head) { const d = document.createElement('div'); d.className = 'mhead'; d.textContent = it.head; menu.appendChild(d); return; }
+    if (it.sep)  { const d = document.createElement('div'); d.className='msep'; menu.appendChild(d); return; }
+    if (it.head) { const d = document.createElement('div'); d.className='mhead'; d.textContent=it.head; menu.appendChild(d); return; }
     const b = document.createElement('button');
     b.className = 'mi'; b.disabled = !!it.disabled;
-    b.innerHTML = '<span></span><span class="k"></span>';
-    b.querySelector('span').textContent = (it.icon ? it.icon + '  ' : '') + it.label;
-    b.querySelector('.k').textContent = it.hint || '';
-    if (!it.disabled) b.onclick = () => { closeMenu(); it.run?.(); };
+    b.innerHTML = `${it.icon ? `<span class="ico">${icon(it.icon,14)}</span>` : (it.dot ? `<span class="sdot ${it.dot}"></span>` : '')}
+      <span class="lb"></span><span class="k"></span>`;
+    b.querySelector('.lb').textContent = it.label;
+    const k = b.querySelector('.k');
+    if (it.hint) k.append(it.hint);
+    if (it.more) k.insertAdjacentHTML('beforeend', icon('chevronRight', 13));
+    if (it.on) k.insertAdjacentHTML('beforeend', icon('check', 13));
+    if (!it.disabled) b.onclick = (e) => { e.stopPropagation(); it.keepOpen ? it.run?.() : (closeMenu(), it.run?.()); };
     menu.appendChild(b);
   });
   menu.hidden = false;
@@ -227,38 +337,50 @@ document.addEventListener('click', (e) => {
 
 function plusMenu() {
   openMenu([
-    { icon: '📎', label: 'แนบไฟล์', run: async () => {
-        const f = await window.cobik.pickFiles();
-        f.forEach((p) => { if (!attached.includes(p)) attached.push(p); });
-        renderChips();
-      } },
-    { icon: '📁', label: 'เพิ่มโฟลเดอร์ในเครื่อง', run: async () => {
-        folders = await window.cobik.folders.add();
-        renderChips();
-        if (folders.length) add('note', 'เพิ่มโฟลเดอร์แล้ว — บทสนทนาเริ่มใหม่เพื่อให้มีผล');
-      } },
-    { icon: '✦', label: 'Skills', hint: 'เร็ว ๆ นี้', disabled: true },
-    { sep: true },
-    { head: 'ต่ออยู่กับ' },
+    { icon:'paperclip', label:'แนบไฟล์', run: async () => {
+        (await window.cobik.pickFiles()).forEach((p) => { if (!attached.includes(p)) attached.push(p); });
+        renderChips(); } },
+    { icon:'folder', label:'เพิ่มโฟลเดอร์ในเครื่อง', run: async () => {
+        folders = await window.cobik.folders.add(); renderChips();
+        if (folders.length) add('note','เพิ่มโฟลเดอร์แล้ว — บทสนทนาเริ่มใหม่เพื่อให้มีผล'); } },
+    { icon:'sparkles', label:'Skills', hint:'เร็ว ๆ นี้', disabled:true },
+    { sep:true },
+    { icon:'plug', label:'ที่ต่ออยู่', more:true,
+      hint: servers.length ? String(servers.filter(s=>s.status==='connected').length) : '',
+      run: connectionsMenu },
+  ]);
+}
+
+function connectionsMenu() {
+  openMenu([
+    { icon:'chevronRight', label:'ย้อนกลับ', run: plusMenu },
+    { head:'ที่ต่ออยู่' },
     ...(servers.length
-      ? servers.map((s) => ({ icon: s.status === 'connected' ? '🟢' : '⚪️', label: s.name, disabled: true }))
-      : [{ label: 'ยังไม่ได้เริ่มบทสนทนา', disabled: true }]),
+      ? servers.map((s) => ({ dot: s.status === 'connected' ? 'on' : 'off',
+          label: s.name.replace(/^claude\.ai /,''), disabled:true,
+          hint: s.status === 'connected' ? '' : 'ยังไม่ได้อนุญาต' }))
+      : [{ label:'ยังไม่ได้เริ่มบทสนทนา', disabled:true }]),
   ]);
 }
 
 function modelMenu() {
-  openMenu([{ head: 'โมเดล' }, ...MODELS.map((m) => ({
-    icon: m.id === model ? '●' : '○', label: m.label + (m.note ? '  · ' + m.note : ''),
-    run: async () => { model = m.id; $('model-name').textContent = m.label; await window.cobik.setModel(m.id); },
+  const rows = modelList.length
+    ? modelList.map((m) => ({ label: m.displayName || m.value, value: m.value, sub: m.description }))
+    : [{ label:'Opus 5', value:'claude-opus-5' }, { label:'Sonnet 5', value:'claude-sonnet-5' }];
+  openMenu([{ head:'โมเดล (จากบัญชีของคุณ)' }, ...rows.map((r) => ({
+    label: r.label, on: r.value === model,
+    run: async () => {
+      model = r.value; modelLabel = r.label; $('model-name').textContent = r.label;
+      await window.cobik.setModel(r.value);
+    },
   }))]);
 }
 
 function effortMenu() {
-  openMenu([{ head: 'ระดับความคิด' }, ...EFFORTS.map((e) => ({
-    icon: e.id === effort ? '●' : '○', label: e.label + (e.note ? '  · ' + e.note : ''),
-    run: () => {
-      effort = e.id; $('effort-name').textContent = e.label;
-      add('note', 'ระดับความคิดจะมีผลกับบทสนทนาถัดไป'); },
+  openMenu([{ head:'ระดับความคิด' }, ...EFFORTS.map((e) => ({
+    label: e.label + (e.note ? ' · ' + e.note : ''), on: e.id === effort,
+    run: () => { effort = e.id; $('effort-name').textContent = e.label;
+                 add('note','ระดับความคิดมีผลกับบทสนทนาถัดไป'); },
   }))]);
 }
 
@@ -267,9 +389,9 @@ function showEmpty() {
   const d = document.createElement('div');
   d.className = 'empty';
   d.innerHTML = '<b>ถามอะไรก็ได้เรื่องงาน</b>';
-  ['สรุปงานที่ค้างในโปรเจกต์นี้', 'ใครว่างสัปดาห์นี้บ้าง', 'งานไหนเลยกำหนดแล้วบ้าง']
-    .forEach((t) => { const s = document.createElement('span'); s.className = 'ex'; s.textContent = t;
-      s.onclick = () => { input.value = t; input.focus(); }; d.appendChild(s); });
+  ['สรุปงานที่ค้างในโปรเจกต์นี้','ใครว่างสัปดาห์นี้บ้าง','งานไหนเลยกำหนดแล้วบ้าง']
+    .forEach((t) => { const s=document.createElement('span'); s.className='ex'; s.textContent=t;
+      s.onclick=()=>{ input.value=t; input.focus(); }; d.appendChild(s); });
   log.appendChild(d);
 }
 
@@ -278,16 +400,25 @@ function showConnect(err) {
   const d = document.createElement('div');
   d.className = 'connect';
   d.innerHTML = '<p>Cobik ต้องขออนุญาตเข้าถึงงานของคุณใน Cowork ก่อน<br>จะเปิดหน้าเว็บให้กดอนุญาตครั้งเดียว</p>';
-  if (err) { const e = document.createElement('p'); e.style.color = 'var(--err)'; e.textContent = err; d.appendChild(e); }
+  if (err && err !== 'not_connected') { const e=document.createElement('p'); e.style.color='var(--err)'; e.textContent=err; d.appendChild(e); }
   const b = document.createElement('button');
-  b.className = 'primary'; b.textContent = 'เชื่อมกับ Cowork';
+  b.className='primary'; b.textContent='เชื่อมกับ Cowork';
   b.onclick = async () => {
     b.disabled = true; b.textContent = 'รออนุญาตในเบราว์เซอร์…';
     const r = await window.cobik.auth.connect();
-    if (r.ok) { connected = true; setDot(); showEmpty(); input.focus(); }
+    if (r.ok) { connected = true; setDot(); showEmpty(); input.focus(); warmup(); }
     else showConnect(r.error);
   };
   d.appendChild(b); log.appendChild(d);
+}
+
+async function warmup() {
+  const r = await window.cobik.warmup();
+  if (r?.ok) {
+    modelList = r.models || [];
+    const cur = modelList.find((m) => m.value === model || m.resolvedModel === model);
+    if (cur) { modelLabel = cur.displayName || modelLabel; $('model-name').textContent = modelLabel; }
+  }
 }
 
 async function submit() {
@@ -299,12 +430,14 @@ async function submit() {
   if (log.querySelector('.empty')) log.innerHTML = '';
 
   const files = attached.slice();
-  const full = files.length ? text + '\n\nไฟล์แนบ:\n' + files.map((f) => '- ' + f).join('\n') : text;
-  add('msg me', text + (files.length ? '\n📎 ' + files.map(base).join(', ') : ''));
+  const full = files.length ? text + '\n\nไฟล์แนบ:\n' + files.map((f)=>'- '+f).join('\n') : text;
+  add('msg me', text + (files.length ? '\n' + files.map(baseName).join(', ') : ''));
   attached = []; renderChips();
 
+  streamEl = null; run = null;
   setBusy(true);
-  streamEl = null; thinkEl = null;
+  showThinking();
+
   const r = await window.cobik.ask(full, short(webUrl), model, effort);
   if (!r.ok) {
     setBusy(false);
@@ -314,7 +447,11 @@ async function submit() {
 }
 
 (async () => {
-  if (!window.cobik) { $('dot').className = 'dot bad'; add('note', 'ไม่พบสะพานของเปลือก'); return; }
+  $('b-plus').innerHTML = icon('plus', 15);
+  $('b-send').innerHTML = icon('arrowUp', 15);
+  $('b-new').innerHTML = `<span class="ico">${icon('refresh',12)}</span>ใหม่`;
+
+  if (!window.cobik) { $('dot').className='dot bad'; add('note','ไม่พบสะพานของเปลือก'); return; }
 
   const st = await window.cobik.getState();
   webUrl = st.webUrl || '';
@@ -325,39 +462,33 @@ async function submit() {
 
   const auth = await window.cobik.auth.status();
   connected = !!auth.connected; setDot();
-  connected ? showEmpty() : showConnect();
+  if (connected) { showEmpty(); warmup(); } else showConnect();
 
   window.cobik.onAgent((ev) => {
     if (ev.type === 'init') {
       servers = ev.servers || [];
       $('tools').textContent = 'เครื่องมือ ' + ev.toolCount + ' ตัว';
     }
-    if (ev.type === 'thinking') {
-      if (!thinkEl) thinkEl = add('think', '');
-      thinkEl.textContent += ev.text; if (atBottom()) toBottom();
-    }
+    if (ev.type === 'thinking') showThinking();
     if (ev.type === 'delta') {
-      thinkEl = null;
-      if (!streamEl) { streamEl = add('msg ai streaming', ''); }
+      hideThinking();
+      if (!streamEl) streamEl = add('msg ai streaming', '');
       streamEl.textContent += ev.text; if (atBottom()) toBottom();
     }
-    if (ev.type === 'tool_start' || ev.type === 'tool') {
+    if (ev.type === 'tool') {
+      hideThinking();
       if (streamEl) { streamEl.classList.remove('streaming'); streamEl = null; }
-      thinkEl = null;
-      if (ev.type === 'tool') addTool(ev.name, ev.input);
+      runStep(ev.name, false);
     }
-    if (ev.type === 'tool_result' && ev.isError) {
-      const d = addTool('ผิดพลาด', null); d.className = 'tool err';
-      d.querySelector('span').textContent = (ev.preview || '').slice(0, 130);
-    }
+    if (ev.type === 'tool_result' && ev.isError) runStep('ผิดพลาด', true);
     if (ev.type === 'done') {
       if (streamEl) { streamEl.classList.remove('streaming'); streamEl = null; }
-      thinkEl = null; setBusy(false);
-      if (typeof ev.cost === 'number') { totalCost += ev.cost; $('cost').textContent = 'รวม $' + totalCost.toFixed(2); }
-      if (ev.subtype && ev.subtype !== 'success') add('note', 'จบแบบ: ' + ev.subtype);
+      setBusy(false);
+      if (typeof ev.cost === 'number' && ev.cost > 0) { totalCost += ev.cost; $('cost').textContent = 'รวม $' + totalCost.toFixed(2); }
+      if (ev.subtype && ev.subtype !== 'success') add('note','จบแบบ: ' + ev.subtype);
     }
-    if (ev.type === 'error') { setBusy(false); add('note', '⚠ ' + ev.message); }
-    if (ev.type === 'closed') { setBusy(false); }
+    if (ev.type === 'error') { setBusy(false); add('note','⚠ ' + ev.message); }
+    if (ev.type === 'closed') setBusy(false);
   });
 
   $('b-send').onclick = submit;
@@ -365,7 +496,8 @@ async function submit() {
   $('p-model').onclick = (e) => { e.stopPropagation(); menu.hidden ? modelMenu() : closeMenu(); };
   $('p-effort').onclick = (e) => { e.stopPropagation(); menu.hidden ? effortMenu() : closeMenu(); };
   $('b-new').onclick = async () => {
-    await window.cobik.newChat(); totalCost = 0; $('cost').textContent = ''; setBusy(false); showEmpty();
+    await window.cobik.newChat(); totalCost = 0; $('cost').textContent = '';
+    setBusy(false); showEmpty(); warmup();
   };
 
   input.addEventListener('keydown', (e) => {
