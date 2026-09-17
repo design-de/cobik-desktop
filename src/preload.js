@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('cobik', {
   agentState: () => ipcRenderer.invoke('cobik:agent-state'),
   setModel: (m) => ipcRenderer.invoke('cobik:set-model', m),
   models: () => ipcRenderer.invoke('cobik:models'),
+  commands: () => ipcRenderer.invoke('cobik:commands'),
   onAgent: (cb) => {
     const h = (_e, ev) => cb(ev);
     ipcRenderer.on('cobik:agent', h);

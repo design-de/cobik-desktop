@@ -281,6 +281,7 @@ ipcMain.handle('cobik:new-chat', () => { agent.reset('main'); return true; });
 ipcMain.handle('cobik:agent-state', () => agent.state('main'));
 ipcMain.handle('cobik:set-model', (_e, m) => agent.setModel('main', m));
 ipcMain.handle('cobik:models', () => agent.models('main'));
+ipcMain.handle('cobik:commands', () => agent.commands('main'));
 
 function buildMenu() {
   const { Menu } = require('electron');

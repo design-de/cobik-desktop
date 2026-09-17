@@ -171,6 +171,12 @@ async function setModel(roomId, model) {
   try { await room.q.setModel(model); room.model = model; return true; } catch { return false; }
 }
 
+async function commands(roomId = 'main') {
+  const room = rooms.get(roomId);
+  if (!room?.alive) return [];
+  try { return await room.q.supportedCommands(); } catch { return []; }
+}
+
 async function models(roomId = 'main') {
   const room = rooms.get(roomId);
   if (!room?.alive) return [];
@@ -186,7 +192,7 @@ async function warmup(roomId, opts) {
   const room = rooms.get(roomId);
   // รอ init สักครู่ให้ CLI พร้อมก่อนถามรายชื่อโมเดล
   for (let i = 0; i < 40 && !room.sessionId; i++) await new Promise((r) => setTimeout(r, 150));
-  return { models: await models(roomId), state: state(roomId) };
+  return { models: await models(roomId), commands: await commands(roomId), state: state(roomId) };
 }
 
 /** ปิดห้อง — เริ่มบทสนทนาใหม่ */
@@ -265,7 +271,7 @@ async function openChat(roomId, sessionId, opts) {
 }
 
 module.exports = {
-  send, stop, reset, setModel, models, warmup, state, setWorkdir,
+  send, stop, reset, setModel, models, commands, warmup, state, setWorkdir,
   listChats, chatAction, openChat,
   DEFAULT_MODEL, DEFAULT_EFFORT,
 };
