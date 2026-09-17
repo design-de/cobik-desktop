@@ -52,7 +52,9 @@ function layout() {
 function setCollapsed(v) {
   collapsed = typeof v === 'boolean' ? v : !collapsed;
   layout();
+  // บอกทั้งสองฝั่ง — แผงใช้ตัดสินว่าจะจุด Claude ไหม · เว็บใช้ทำสถานะปุ่ม ✨
   panelView?.webContents.send('cobik:collapsed', collapsed);
+  webView?.webContents.send('cobik:collapsed', collapsed);
   savePrefs();
   return collapsed;
 }
@@ -92,8 +94,15 @@ function createWindow() {
   });
 
   // ── ซ้าย: เว็บ Cowork ของจริง ──
+  // ต่อสะพานตัวเล็กให้ด้วย เพื่อให้ Topbar รู้ว่าอยู่ในแอป (ซ่อน AiChat เดิม)
+  // และให้ไอคอน ✨ สั่งหุบ/กางแผงข้างขวาได้
   webView = new WebContentsView({
-    webPreferences: { partition: PARTITION, contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      partition: PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'preload-web.js'),
+    },
   });
   win.contentView.addChildView(webView);
   webView.webContents.loadURL(TARGET);
@@ -162,6 +171,7 @@ ipcMain.handle('cobik:set-panel-width', (_e, w) => {
 });
 
 ipcMain.handle('cobik:toggle-panel', (_e, v) => setCollapsed(v));
+ipcMain.handle('cobik:panel-open', () => !collapsed);
 ipcMain.handle('cobik:drag-start', () => { startDrag(); });
 ipcMain.handle('cobik:drag-end', () => { stopDrag(); savePrefs(); return panelWidth; });
 
