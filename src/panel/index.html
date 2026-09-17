@@ -5,46 +5,67 @@
 <title>Cobik</title>
 <style>
   :root {
-    --bg: #17171a; --raised: #1f1f23; --line: #2e2e34;
-    --ink: #ececef; --ink-soft: #a6a6ae; --ink-mute: #74747d;
-    --accent: #4f7cff; --ok: #3fb950; --err: #f06a5d;
+    --bg:#17171a; --raised:#1f1f23; --line:#2e2e34; --line-soft:#26262b;
+    --ink:#ececef; --ink-soft:#a6a6ae; --ink-mute:#74747d;
+    --accent:#4f7cff; --ok:#3fb950; --err:#f06a5d; --warn:#d9a441;
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; height: 100vh; display: flex; flex-direction: column;
-    background: var(--bg); color: var(--ink);
-    font: 13px/1.55 -apple-system, "SF Pro Text", "IBM Plex Sans Thai", sans-serif;
-    border-left: 1px solid var(--line);
+    margin:0; height:100vh; display:flex; flex-direction:column;
+    background:var(--bg); color:var(--ink);
+    font:13px/1.55 -apple-system,"SF Pro Text","IBM Plex Sans Thai",sans-serif;
+    border-left:1px solid var(--line); overflow:hidden;
   }
   header {
-    -webkit-app-region: drag;
-    padding: 10px 14px; border-bottom: 1px solid var(--line);
-    display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+    -webkit-app-region:drag; padding:10px 14px; border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:8px; flex-shrink:0;
   }
-  .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--ink-mute); flex-shrink: 0; }
-  .dot.on { background: var(--ok); }
-  .dot.bad { background: var(--err); }
-  h1 { font-size: 13px; font-weight: 600; margin: 0; letter-spacing: .2px; }
-  .ctx { font-size: 11px; color: var(--ink-mute); margin-left: auto; -webkit-app-region: no-drag;
-         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
-  main { flex: 1; overflow-y: auto; padding: 14px; }
-  .card { background: var(--raised); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px; }
-  .card h2 { font-size: 11px; font-weight: 600; color: var(--ink-soft); margin: 0 0 8px; text-transform: uppercase; letter-spacing: .6px; }
-  .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 12px; }
-  .row span:last-child { color: var(--ink-soft); text-align: right; word-break: break-all; }
-  footer { padding: 12px 14px; border-top: 1px solid var(--line); flex-shrink: 0; }
+  .dot { width:7px; height:7px; border-radius:99px; background:var(--ink-mute); flex-shrink:0; }
+  .dot.on{background:var(--ok)} .dot.bad{background:var(--err)} .dot.busy{background:var(--warn)}
+  h1 { font-size:13px; font-weight:600; margin:0; letter-spacing:.2px; }
+  .ctx { font-size:11px; color:var(--ink-mute); margin-left:auto; -webkit-app-region:no-drag;
+         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52%; }
+  .hbtn { -webkit-app-region:no-drag; font:inherit; font-size:11px; padding:2px 8px; border-radius:6px;
+          background:transparent; color:var(--ink-mute); border:1px solid var(--line); cursor:pointer; }
+  .hbtn:hover { color:var(--ink); border-color:var(--accent); }
+
+  main { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; }
+  main::-webkit-scrollbar { width:8px } main::-webkit-scrollbar-thumb { background:var(--line); border-radius:9px }
+
+  .msg { max-width:92%; padding:8px 11px; border-radius:11px; white-space:pre-wrap; word-break:break-word; }
+  .me { align-self:flex-end; background:var(--accent); color:#fff; }
+  .ai { align-self:flex-start; background:var(--raised); border:1px solid var(--line-soft); }
+
+  .tool { align-self:flex-start; font-size:11px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;
+          padding:2px 2px; max-width:92%; }
+  .tool code { background:var(--raised); padding:1px 6px; border-radius:5px; color:var(--ink-soft); font-size:10.5px; }
+  .tool.err { color:var(--err); }
+
+  .note { font-size:11px; color:var(--ink-mute); text-align:center; padding:4px 0; }
+  .empty { margin:auto; text-align:center; color:var(--ink-mute); font-size:12px; line-height:1.9; }
+  .empty b { color:var(--ink-soft); font-weight:600; display:block; margin-bottom:6px; font-size:13px; }
+  .empty .ex { display:inline-block; margin:3px; padding:4px 10px; border:1px solid var(--line);
+               border-radius:99px; cursor:pointer; color:var(--ink-soft); }
+  .empty .ex:hover { border-color:var(--accent); color:var(--ink); }
+
+  .connect { background:var(--raised); border:1px solid var(--line); border-radius:11px; padding:16px; text-align:center; }
+  .connect p { margin:0 0 12px; color:var(--ink-soft); font-size:12px; line-height:1.7; }
+  .primary { font:inherit; font-weight:600; padding:7px 16px; border-radius:8px; border:none;
+             background:var(--accent); color:#fff; cursor:pointer; }
+
+  footer { padding:10px 14px 12px; border-top:1px solid var(--line); flex-shrink:0; }
+  .box { display:flex; gap:8px; align-items:flex-end; }
   textarea {
-    width: 100%; min-height: 62px; resize: vertical; padding: 9px 11px;
-    background: var(--raised); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 9px; font: inherit;
+    flex:1; min-height:38px; max-height:150px; resize:none; padding:9px 11px;
+    background:var(--raised); color:var(--ink); border:1px solid var(--line);
+    border-radius:9px; font:inherit;
   }
-  textarea:focus { outline: none; border-color: var(--accent); }
-  .hint { font-size: 11px; color: var(--ink-mute); margin-top: 7px; }
-  button {
-    font: inherit; padding: 5px 11px; border-radius: 7px; cursor: pointer;
-    background: var(--raised); color: var(--ink); border: 1px solid var(--line);
-  }
-  button:hover { border-color: var(--accent); }
+  textarea:focus { outline:none; border-color:var(--accent); }
+  textarea:disabled { opacity:.5 }
+  .send { font:inherit; padding:9px 13px; border-radius:9px; border:none; background:var(--accent);
+          color:#fff; cursor:pointer; flex-shrink:0; }
+  .send:disabled { opacity:.4; cursor:default }
+  .foot-note { font-size:10.5px; color:var(--ink-mute); margin-top:7px; display:flex; justify-content:space-between; gap:8px; }
 </style>
 </head>
 <body>
@@ -52,56 +73,147 @@
     <span class="dot" id="dot"></span>
     <h1>Cobik</h1>
     <span class="ctx" id="ctx">—</span>
+    <button class="hbtn" id="b-new">ใหม่</button>
   </header>
 
-  <main>
-    <div class="card">
-      <h2>สถานะเปลือก</h2>
-      <div class="row"><span>สะพาน</span><span id="s-bridge">…</span></div>
-      <div class="row"><span>เว็บ</span><span id="s-target">…</span></div>
-      <div class="row"><span>หน้าที่เปิดอยู่</span><span id="s-url">…</span></div>
-    </div>
-
-    <div class="card">
-      <h2>ทดสอบสะพาน</h2>
-      <div style="display:flex; gap:6px; flex-wrap:wrap;">
-        <button id="b-home">ไปหน้าแรก</button>
-        <button id="b-projects">ไปหน้าโปรเจกต์</button>
-        <button id="b-reload">โหลดซ้ำ</button>
-        <button id="b-wide">กว้างขึ้น</button>
-      </div>
-    </div>
-  </main>
+  <main id="log"></main>
 
   <footer>
-    <textarea id="input" placeholder="ถาม Claude เรื่องงานนี้… (ยังไม่ต่อ — ขั้นถัดไป)" disabled></textarea>
-    <div class="hint">ขั้นถัดไป: ต่อ Claude Agent SDK + OAuth เข้า Cowork</div>
+    <div class="box">
+      <textarea id="input" rows="1" placeholder="ถาม Claude เรื่องงานนี้…"></textarea>
+      <button class="send" id="send">ส่ง</button>
+    </div>
+    <div class="foot-note">
+      <span id="tools">—</span>
+      <span id="cost"></span>
+    </div>
   </footer>
 
 <script>
-  const $ = (id) => document.getElementById(id);
-  const short = (u) => { try { const x = new URL(u); return x.pathname + x.search; } catch { return u || '—'; } };
+const $ = (id) => document.getElementById(id);
+const log = $('log'), input = $('input'), send = $('send');
+let webUrl = '', busy = false, connected = false, totalCost = 0;
 
-  (async () => {
-    if (!window.cobik) { $('dot').className = 'dot bad'; $('s-bridge').textContent = 'ไม่พบสะพาน'; return; }
-    const st = await window.cobik.getState();
-    $('dot').className = 'dot on';
-    $('s-bridge').textContent = 'v' + st.bridgeVersion;
-    $('s-target').textContent = new URL(st.target).host;
-    $('s-url').textContent = short(st.webUrl);
-    $('ctx').textContent = short(st.webUrl);
+const short = (u) => { try { const x = new URL(u); return x.pathname + x.search; } catch { return u || '—'; } };
+const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+const toBottom = () => { log.scrollTop = log.scrollHeight; };
 
-    window.cobik.onWebUrl((url) => {
-      $('s-url').textContent = short(url);
-      $('ctx').textContent = short(url);
+function add(cls, text) {
+  const stick = atBottom();
+  const d = document.createElement('div');
+  d.className = cls; d.textContent = text;
+  log.appendChild(d); if (stick) toBottom();
+  return d;
+}
+
+function addTool(name, input) {
+  const stick = atBottom();
+  const d = document.createElement('div');
+  d.className = 'tool';
+  const pretty = String(name).replace(/^mcp__cobik__/, '');
+  const arg = input && Object.keys(input).length ? JSON.stringify(input).slice(0, 70) : '';
+  d.innerHTML = '⚙︎ <code></code><span></span>';
+  d.querySelector('code').textContent = pretty;
+  d.querySelector('span').textContent = arg;
+  log.appendChild(d); if (stick) toBottom();
+  return d;
+}
+
+function showEmpty() {
+  log.innerHTML = '';
+  const d = document.createElement('div');
+  d.className = 'empty';
+  d.innerHTML = '<b>ถามอะไรก็ได้เรื่องงาน</b>';
+  ['สรุปงานที่ค้างในโปรเจกต์นี้', 'ใครว่างสัปดาห์นี้บ้าง', 'มีงานอะไรเลยกำหนดแล้ว']
+    .forEach((t) => {
+      const s = document.createElement('span');
+      s.className = 'ex'; s.textContent = t;
+      s.onclick = () => { input.value = t; input.focus(); };
+      d.appendChild(s);
     });
+  log.appendChild(d);
+}
 
-    $('b-home').onclick = () => window.cobik.navigate('/');
-    $('b-projects').onclick = () => window.cobik.navigate('/projects');
-    $('b-reload').onclick = () => window.cobik.reloadWeb();
-    let w = 420;
-    $('b-wide').onclick = async () => { w = w >= 700 ? 420 : w + 140; w = await window.cobik.setPanelWidth(w); };
-  })();
+function showConnect(err) {
+  log.innerHTML = '';
+  const d = document.createElement('div');
+  d.className = 'connect';
+  d.innerHTML = '<p>Cobik ต้องขออนุญาตเข้าถึงงานของคุณใน Cowork ก่อน<br>จะเปิดหน้าเว็บให้กดอนุญาตครั้งเดียว</p>';
+  if (err) { const e = document.createElement('p'); e.style.color = 'var(--err)'; e.textContent = err; d.appendChild(e); }
+  const b = document.createElement('button');
+  b.className = 'primary'; b.textContent = 'เชื่อมกับ Cowork';
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = 'รออนุญาตในเบราว์เซอร์…';
+    const r = await window.cobik.auth.connect();
+    if (r.ok) { connected = true; setDot(); showEmpty(); input.focus(); }
+    else { showConnect(r.error === 'not_connected' ? '' : r.error); }
+  };
+  d.appendChild(b);
+  log.appendChild(d);
+}
+
+function setDot() {
+  $('dot').className = 'dot' + (busy ? ' busy' : connected ? ' on' : ' bad');
+}
+
+async function submit() {
+  const text = input.value.trim();
+  if (!text || busy || !connected) return;
+  input.value = ''; input.style.height = 'auto';
+  if (log.querySelector('.empty')) log.innerHTML = '';
+  add('msg me', text);
+
+  busy = true; send.disabled = true; input.disabled = true; setDot();
+  const r = await window.cobik.ask(text, short(webUrl));
+  busy = false; send.disabled = false; input.disabled = false; setDot();
+  input.focus();
+
+  if (!r.ok && r.error === 'not_connected') { connected = false; setDot(); showConnect(); }
+  else if (!r.ok && r.error) add('note', '⚠ ' + r.error);
+}
+
+(async () => {
+  if (!window.cobik) { $('dot').className = 'dot bad'; add('note', 'ไม่พบสะพานของเปลือก'); return; }
+
+  const st = await window.cobik.getState();
+  webUrl = st.webUrl || '';
+  $('ctx').textContent = short(webUrl);
+  window.cobik.onWebUrl((u) => { webUrl = u; $('ctx').textContent = short(u); });
+
+  const auth = await window.cobik.auth.status();
+  connected = !!auth.connected;
+  setDot();
+  connected ? showEmpty() : showConnect();
+
+  let streaming = null;
+  window.cobik.onAgent((ev) => {
+    if (ev.type === 'init') {
+      $('tools').textContent = 'เครื่องมือ ' + ev.toolCount + ' ตัว · ' + (ev.model || '');
+      streaming = null;
+    }
+    if (ev.type === 'text') { streaming = add('msg ai', ev.text); }
+    if (ev.type === 'tool') { addTool(ev.name, ev.input); streaming = null; }
+    if (ev.type === 'tool_result' && ev.isError) {
+      const d = addTool('ผิดพลาด', null); d.className = 'tool err';
+      d.querySelector('span').textContent = ev.preview.slice(0, 120);
+    }
+    if (ev.type === 'done') {
+      if (typeof ev.cost === 'number') { totalCost += ev.cost; $('cost').textContent = 'รวม $' + totalCost.toFixed(2); }
+      if (ev.subtype && ev.subtype !== 'success') add('note', 'จบแบบ: ' + ev.subtype);
+    }
+    if (ev.type === 'error') add('note', '⚠ ' + ev.message);
+  });
+
+  send.onclick = submit;
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+  });
+  input.addEventListener('input', () => {
+    input.style.height = 'auto';
+    input.style.height = Math.min(input.scrollHeight, 150) + 'px';
+  });
+  $('b-new').onclick = async () => { await window.cobik.newChat(); totalCost = 0; $('cost').textContent = ''; showEmpty(); };
+})();
 </script>
 </body>
 </html>

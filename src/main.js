@@ -3,6 +3,8 @@
 // ทั้งสองฝั่งเป็น WebContentsView คนละตัว → เว็บแอปไม่ต้องรู้จักแผง และแผงไม่ต้องเบียดเว็บ
 const { app, BrowserWindow, WebContentsView, ipcMain, session } = require('electron');
 const path = require('node:path');
+const oauth = require('./oauth');
+const agent = require('./agent');
 
 const TARGET = process.env.COBIK_TARGET === 'local'
   ? 'http://localhost:3000'
@@ -96,6 +98,39 @@ ipcMain.handle('cobik:set-panel-width', (_e, w) => {
   layout();
   return panelWidth;
 });
+
+// ── เชื่อม Cowork (OAuth) ──
+ipcMain.handle('cobik:auth-status', () => oauth.status());
+
+ipcMain.handle('cobik:auth-connect', async () => {
+  try {
+    const rec = await oauth.connect(TARGET, { interactive: true });
+    return { ok: true, scope: rec.scope };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+});
+
+ipcMain.handle('cobik:auth-clear', () => { oauth.clear(); agent.reset(); return true; });
+
+// ── ถาม Claude ──
+ipcMain.handle('cobik:ask', async (_e, { prompt, context }) => {
+  if (agent.isRunning()) return { ok: false, error: 'กำลังทำงานอยู่' };
+
+  let rec;
+  try {
+    rec = await oauth.connect(TARGET, { interactive: false });
+    if (!rec) return { ok: false, error: 'not_connected' };
+  } catch (e) {
+    return { ok: false, error: e?.message || 'ต่ออายุสิทธิ์ไม่สำเร็จ' };
+  }
+
+  const send = (ev) => { if (panelView && !panelView.webContents.isDestroyed()) panelView.webContents.send('cobik:agent', ev); };
+  const r = await agent.ask({ base: TARGET, token: rec.access_token, prompt, context, onEvent: send });
+  return { ok: !r.error, error: r.error || null };
+});
+
+ipcMain.handle('cobik:new-chat', () => { agent.reset(); return true; });
 
 app.whenReady().then(() => {
   // ให้ session ของ partition นี้ใช้ user-agent ปกติ (บางเว็บกันบล็อก webview)

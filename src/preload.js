@@ -19,4 +19,20 @@ contextBridge.exposeInMainWorld('cobik', {
     ipcRenderer.on('cobik:web-url', h);
     return () => ipcRenderer.removeListener('cobik:web-url', h);
   },
+
+  // ── สิทธิ์เข้า Cowork ──
+  auth: {
+    status: () => ipcRenderer.invoke('cobik:auth-status'),
+    connect: () => ipcRenderer.invoke('cobik:auth-connect'),
+    clear: () => ipcRenderer.invoke('cobik:auth-clear'),
+  },
+
+  // ── คุยกับ Claude ──
+  ask: (prompt, context) => ipcRenderer.invoke('cobik:ask', { prompt, context }),
+  newChat: () => ipcRenderer.invoke('cobik:new-chat'),
+  onAgent: (cb) => {
+    const h = (_e, ev) => cb(ev);
+    ipcRenderer.on('cobik:agent', h);
+    return () => ipcRenderer.removeListener('cobik:agent', h);
+  },
 });
