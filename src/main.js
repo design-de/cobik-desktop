@@ -13,14 +13,29 @@ const TARGET = process.env.COBIK_TARGET === 'local'
 const PANEL_WIDTH = 420;
 const PANEL_MIN = 320;
 const PANEL_MAX = 900;
-const RAIL_WIDTH = 40;   // ตอนหุบ เหลือแถบบาง ๆ ไว้กดกางกลับ
 const MIN_WEB_WIDTH = 480;
 
 let win = null;
 let webView = null;   // ซ้าย: Cowork
 let panelView = null; // ขวา: แผง Claude
+
+// แผงผู้ช่วยไม่ใช่พระเอกของแอป — งานคือพระเอก
+// จึง "เริ่มแบบหุบเสมอในครั้งแรก" แล้วค่อยขึ้นมาเมื่อผู้ใช้กดเอง (ไอคอน ✨ บน Topbar / ⌘/)
+// หลังจากนั้นจำสถานะล่าสุดไว้ — เปิดค้างไว้ก็ยังเปิดอยู่ครั้งหน้า
+const prefsFile = () => require('node:path').join(app.getPath('userData'), 'ui.json');
+function loadPrefs() {
+  try { return JSON.parse(require('node:fs').readFileSync(prefsFile(), 'utf8')); }
+  catch { return { collapsed: true, panelWidth: PANEL_WIDTH }; }
+}
+function savePrefs() {
+  try {
+    require('node:fs').mkdirSync(app.getPath('userData'), { recursive: true });
+    require('node:fs').writeFileSync(prefsFile(), JSON.stringify({ collapsed, panelWidth }));
+  } catch {}
+}
+
 let panelWidth = PANEL_WIDTH;
-let collapsed = false;
+let collapsed = true;
 
 // cookie ของ Supabase ต้องอยู่ข้ามการปิด-เปิดแอป → partition ถาวรชื่อเดียวตลอด
 const PARTITION = 'persist:cobik';
@@ -28,7 +43,8 @@ const PARTITION = 'persist:cobik';
 function layout() {
   if (!win || !webView || !panelView) return;
   const { width, height } = win.getContentBounds();
-  const pw = collapsed ? RAIL_WIDTH : Math.min(panelWidth, Math.max(PANEL_MIN, width - MIN_WEB_WIDTH));
+  // หุบ = หายไปเลย ไม่เหลือแถบกินที่ — ทางกลับคือไอคอนบน Topbar ของ Cowork หรือ ⌘/
+  const pw = collapsed ? 0 : Math.min(panelWidth, Math.max(PANEL_MIN, width - MIN_WEB_WIDTH));
   webView.setBounds({ x: 0, y: 0, width: width - pw, height });
   panelView.setBounds({ x: width - pw, y: 0, width: pw, height });
 }
@@ -37,6 +53,7 @@ function setCollapsed(v) {
   collapsed = typeof v === 'boolean' ? v : !collapsed;
   layout();
   panelView?.webContents.send('cobik:collapsed', collapsed);
+  savePrefs();
   return collapsed;
 }
 
@@ -60,6 +77,10 @@ function startDrag() {
 function stopDrag() { clearInterval(dragTimer); dragTimer = null; }
 
 function createWindow() {
+  const prefs = loadPrefs();
+  collapsed = prefs.collapsed !== false;              // ไม่เคยเปิดมาก่อน = หุบไว้
+  panelWidth = Number(prefs.panelWidth) || PANEL_WIDTH;
+
   win = new BrowserWindow({
     width: 1600,
     height: 1000,
@@ -136,13 +157,13 @@ ipcMain.handle('cobik:navigate', (_e, pathname) => {
 ipcMain.handle('cobik:set-panel-width', (_e, w) => {
   panelWidth = Math.max(PANEL_MIN, Math.min(PANEL_MAX, Number(w) || PANEL_WIDTH));
   collapsed = false;
-  layout();
+  layout(); savePrefs();
   return panelWidth;
 });
 
 ipcMain.handle('cobik:toggle-panel', (_e, v) => setCollapsed(v));
 ipcMain.handle('cobik:drag-start', () => { startDrag(); });
-ipcMain.handle('cobik:drag-end', () => { stopDrag(); return panelWidth; });
+ipcMain.handle('cobik:drag-end', () => { stopDrag(); savePrefs(); return panelWidth; });
 
 // ── เชื่อม Cowork (OAuth) ──
 ipcMain.handle('cobik:auth-status', () => oauth.status());
@@ -259,9 +280,9 @@ function buildMenu() {
       submenu: [
         { label: 'ซ่อน/แสดงแผง Claude', accelerator: 'CmdOrCtrl+/', click: () => setCollapsed() },
         { type: 'separator' },
-        { label: 'แผงแคบ',  accelerator: 'CmdOrCtrl+1', click: () => { panelWidth = 340; collapsed = false; layout(); } },
-        { label: 'แผงกลาง', accelerator: 'CmdOrCtrl+2', click: () => { panelWidth = 460; collapsed = false; layout(); } },
-        { label: 'แผงกว้าง', accelerator: 'CmdOrCtrl+3', click: () => { panelWidth = 640; collapsed = false; layout(); } },
+        { label: 'แผงแคบ',  accelerator: 'CmdOrCtrl+1', click: () => { panelWidth = 340; collapsed = false; layout(); savePrefs(); } },
+        { label: 'แผงกลาง', accelerator: 'CmdOrCtrl+2', click: () => { panelWidth = 460; collapsed = false; layout(); savePrefs(); } },
+        { label: 'แผงกว้าง', accelerator: 'CmdOrCtrl+3', click: () => { panelWidth = 640; collapsed = false; layout(); savePrefs(); } },
         { type: 'separator' },
         { role: 'reload' }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' },
       ],
