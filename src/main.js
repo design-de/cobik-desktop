@@ -89,7 +89,10 @@ function createWindow() {
     minWidth: MIN_WEB_WIDTH + 320,
     minHeight: 600,
     title: 'Cobik',
-    titleBarStyle: 'hiddenInset', // ปุ่มจราจร macOS ลอยบนเนื้อหา ไม่กินแถบเต็ม
+    // ปุ่มปิด/ย่อ/ขยายลอยบนเนื้อหา ไม่กินแถบเต็มความสูง
+    // Topbar ของ Cowork เว้นที่ให้ทางซ้ายเมื่อรู้ว่าอยู่ในเปลือก (ดู components/Topbar.jsx)
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 14, y: 14 },
     backgroundColor: '#1a1a1a',
   });
 
