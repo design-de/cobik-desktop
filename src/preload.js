@@ -13,6 +13,16 @@ contextBridge.exposeInMainWorld('cobik', {
   navigate: (pathname) => ipcRenderer.invoke('cobik:navigate', pathname),
   setPanelWidth: (w) => ipcRenderer.invoke('cobik:set-panel-width', w),
 
+  // หุบ/กางแผง + ลากขอบปรับความกว้าง
+  togglePanel: (v) => ipcRenderer.invoke('cobik:toggle-panel', v),
+  dragStart: () => ipcRenderer.invoke('cobik:drag-start'),
+  dragEnd: () => ipcRenderer.invoke('cobik:drag-end'),
+  onCollapsed: (cb) => {
+    const h = (_e, v) => cb(v);
+    ipcRenderer.on('cobik:collapsed', h);
+    return () => ipcRenderer.removeListener('cobik:collapsed', h);
+  },
+
   // ฝั่งซ้ายเปลี่ยนหน้า → แผงรู้ (เฟส 2)
   onWebUrl: (cb) => {
     const h = (_e, url) => cb(url);

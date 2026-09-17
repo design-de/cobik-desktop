@@ -129,6 +129,20 @@
   .sdot { width:6px; height:6px; border-radius:99px; flex-shrink:0; }
   .sdot.on{background:var(--ok)} .sdot.off{background:var(--ink-mute)}
 
+  /* ── ขอบลากปรับความกว้าง ── */
+  #grip { position:absolute; left:0; top:0; bottom:0; width:6px; cursor:col-resize; z-index:40; }
+  #grip:hover, #grip.on { background:var(--accent); opacity:.55; }
+
+  /* ── โหมดแถบบาง (หุบแล้ว) ── */
+  body.rail > header, body.rail > main, body.rail > footer, body.rail > .chats, body.rail > #grip { display:none; }
+  #rail { display:none; flex-direction:column; align-items:center; gap:10px; padding-top:44px; height:100%; }
+  body.rail > #rail { display:flex; }
+  #rail button { width:30px; height:30px; border-radius:8px; border:1px solid var(--line);
+                 background:var(--raised); color:var(--ink-soft); display:grid; place-items:center; }
+  #rail button:hover { border-color:var(--accent); color:var(--ink); }
+  #rail .rdot { width:7px; height:7px; border-radius:99px; background:var(--ink-mute); }
+  #rail .rdot.on{background:var(--ok)} #rail .rdot.busy{background:var(--warn); animation:pulse 1.2s ease-in-out infinite}
+
   /* ── หน้ารายการบทสนทนา ── */
   .chats { position:absolute; inset:0; background:var(--bg); z-index:30; display:flex; flex-direction:column; }
   .chats[hidden] { display:none; }
@@ -154,12 +168,19 @@
 </style>
 </head>
 <body>
+  <div id="grip" title="ลากเพื่อปรับความกว้าง"></div>
+  <div id="rail">
+    <button id="r-open" title="กางแผง Claude (⌘/)"></button>
+    <span class="rdot" id="r-dot"></span>
+  </div>
+
   <header>
     <button class="hbtn" id="b-list" title="บทสนทนาทั้งหมด"></button>
     <span class="dot" id="dot"></span>
     <h1>Cobik</h1>
     <span class="ctx" id="ctx">—</span>
     <button class="hbtn" id="b-new" title="บทสนทนาใหม่"></button>
+    <button class="hbtn" id="b-collapse" title="หุบแผง ดูงานเต็มจอ (⌘/)"></button>
   </header>
 
   <main id="log"></main>
@@ -319,7 +340,11 @@ function showThinking(text) {
 }
 function hideThinking() { thinkEl?.remove(); thinkEl = null; }
 
-function setDot() { $('dot').className = 'dot' + (busy ? ' busy' : connected ? ' on' : ' bad'); }
+function setDot() {
+  const cls = busy ? ' busy' : connected ? ' on' : ' bad';
+  $('dot').className = 'dot' + cls;
+  const rd = $('r-dot'); if (rd) rd.className = 'rdot' + cls;
+}
 
 function setBusy(b) {
   busy = b; setDot();
@@ -555,6 +580,8 @@ async function submit() {
   $('b-new').innerHTML = icon('plus', 13);
   $('b-new2').innerHTML = icon('plus', 13);
   $('b-list').innerHTML = icon('chevronRight', 13).replace('class="ic"', 'class="ic" style="transform:rotate(180deg)"');
+  $('b-collapse').innerHTML = icon('chevronRight', 13);
+  $('r-open').innerHTML = icon('sparkles', 15);
   $('b-back').innerHTML = icon('chevronRight', 13).replace('class="ic"', 'class="ic" style="transform:rotate(180deg)"');
 
   if (!window.cobik) { $('dot').className='dot bad'; add('note','ไม่พบสะพานของเปลือก'); return; }
@@ -605,6 +632,27 @@ async function submit() {
     await window.cobik.newChat(); totalCost = 0; $('cost').textContent = '';
     setBusy(false); closeChats(); showEmpty(); warmup(); input.focus();
   };
+  // ── หุบ/กางแผง ──
+  const applyCollapsed = (v) => {
+    document.body.classList.toggle('rail', !!v);
+    $('b-collapse').title = v ? 'กางแผง (⌘/)' : 'หุบแผง ดูงานเต็มจอ (⌘/)';
+  };
+  $('b-collapse').onclick = async () => applyCollapsed(await window.cobik.togglePanel(true));
+  $('r-open').onclick = async () => applyCollapsed(await window.cobik.togglePanel(false));
+  window.cobik.onCollapsed(applyCollapsed);
+  applyCollapsed(st.collapsed);
+
+  // ── ลากขอบซ้ายปรับความกว้าง ──
+  const grip = $('grip');
+  grip.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); grip.classList.add('on');
+    window.cobik.dragStart();
+    const up = () => { grip.classList.remove('on'); window.cobik.dragEnd();
+      window.removeEventListener('pointerup', up); window.removeEventListener('blur', up); };
+    window.addEventListener('pointerup', up);
+    window.addEventListener('blur', up);
+  });
+
   $('b-new').onclick = newChat;
   $('b-new2').onclick = newChat;
   $('b-list').onclick = openChats;

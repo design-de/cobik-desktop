@@ -11,23 +11,53 @@ const TARGET = process.env.COBIK_TARGET === 'local'
   : 'https://cowork-app-tau.vercel.app';
 
 const PANEL_WIDTH = 420;
-const MIN_WEB_WIDTH = 560;
+const PANEL_MIN = 320;
+const PANEL_MAX = 900;
+const RAIL_WIDTH = 40;   // ตอนหุบ เหลือแถบบาง ๆ ไว้กดกางกลับ
+const MIN_WEB_WIDTH = 480;
 
 let win = null;
 let webView = null;   // ซ้าย: Cowork
 let panelView = null; // ขวา: แผง Claude
 let panelWidth = PANEL_WIDTH;
+let collapsed = false;
 
 // cookie ของ Supabase ต้องอยู่ข้ามการปิด-เปิดแอป → partition ถาวรชื่อเดียวตลอด
 const PARTITION = 'persist:cobik';
 
 function layout() {
-  if (!win) return;
+  if (!win || !webView || !panelView) return;
   const { width, height } = win.getContentBounds();
-  const pw = Math.min(panelWidth, Math.max(0, width - MIN_WEB_WIDTH));
+  const pw = collapsed ? RAIL_WIDTH : Math.min(panelWidth, Math.max(PANEL_MIN, width - MIN_WEB_WIDTH));
   webView.setBounds({ x: 0, y: 0, width: width - pw, height });
   panelView.setBounds({ x: width - pw, y: 0, width: pw, height });
 }
+
+function setCollapsed(v) {
+  collapsed = typeof v === 'boolean' ? v : !collapsed;
+  layout();
+  panelView?.webContents.send('cobik:collapsed', collapsed);
+  return collapsed;
+}
+
+// ลากขอบซ้ายของแผงเพื่อปรับความกว้าง
+// แผงกับเว็บเป็นคนละ view — ลากออกนอกแผงแล้ว mousemove หายไป
+// จึงให้ main อ่านตำแหน่งเคอร์เซอร์จากระบบแทน ระหว่างที่ผู้ใช้ยังกดอยู่
+let dragTimer = null;
+function startDrag() {
+  if (dragTimer) return;
+  const { screen } = require('electron');
+  dragTimer = setInterval(() => {
+    if (!win) return stopDrag();
+    const pt = screen.getCursorScreenPoint();
+    const b = win.getContentBounds();
+    const w = Math.round(b.x + b.width - pt.x);
+    panelWidth = Math.max(PANEL_MIN, Math.min(PANEL_MAX, w));
+    if (collapsed) collapsed = false;
+    layout();
+  }, 16);
+}
+function stopDrag() { clearInterval(dragTimer); dragTimer = null; }
 
 function createWindow() {
   win = new BrowserWindow({
@@ -78,6 +108,8 @@ ipcMain.handle('cobik:get-state', () => ({
   bridgeVersion: 1,
   target: TARGET,
   webUrl: webView ? webView.webContents.getURL() : null,
+  collapsed,
+  panelWidth,
 }));
 
 ipcMain.handle('cobik:reload-web', () => {
@@ -94,10 +126,15 @@ ipcMain.handle('cobik:navigate', (_e, pathname) => {
 });
 
 ipcMain.handle('cobik:set-panel-width', (_e, w) => {
-  panelWidth = Math.max(320, Math.min(900, Number(w) || PANEL_WIDTH));
+  panelWidth = Math.max(PANEL_MIN, Math.min(PANEL_MAX, Number(w) || PANEL_WIDTH));
+  collapsed = false;
   layout();
   return panelWidth;
 });
+
+ipcMain.handle('cobik:toggle-panel', (_e, v) => setCollapsed(v));
+ipcMain.handle('cobik:drag-start', () => { startDrag(); });
+ipcMain.handle('cobik:drag-end', () => { stopDrag(); return panelWidth; });
 
 // ── เชื่อม Cowork (OAuth) ──
 ipcMain.handle('cobik:auth-status', () => oauth.status());
@@ -203,7 +240,30 @@ ipcMain.handle('cobik:agent-state', () => agent.state('main'));
 ipcMain.handle('cobik:set-model', (_e, m) => agent.setModel('main', m));
 ipcMain.handle('cobik:models', () => agent.models('main'));
 
+function buildMenu() {
+  const { Menu } = require('electron');
+  const mac = process.platform === 'darwin';
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    ...(mac ? [{ role: 'appMenu' }] : []),
+    { role: 'editMenu' },
+    {
+      label: 'มุมมอง',
+      submenu: [
+        { label: 'ซ่อน/แสดงแผง Claude', accelerator: 'CmdOrCtrl+/', click: () => setCollapsed() },
+        { type: 'separator' },
+        { label: 'แผงแคบ',  accelerator: 'CmdOrCtrl+1', click: () => { panelWidth = 340; collapsed = false; layout(); } },
+        { label: 'แผงกลาง', accelerator: 'CmdOrCtrl+2', click: () => { panelWidth = 460; collapsed = false; layout(); } },
+        { label: 'แผงกว้าง', accelerator: 'CmdOrCtrl+3', click: () => { panelWidth = 640; collapsed = false; layout(); } },
+        { type: 'separator' },
+        { role: 'reload' }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' },
+      ],
+    },
+    { role: 'windowMenu' },
+  ]));
+}
+
 app.whenReady().then(() => {
+  buildMenu();
   // ให้ session ของ partition นี้ใช้ user-agent ปกติ (บางเว็บกันบล็อก webview)
   session.fromPartition(PARTITION);
   createWindow();
