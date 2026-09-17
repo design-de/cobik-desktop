@@ -12,8 +12,16 @@
 //    ห้ามตั้งที่ process.env ของ main — จะไหลไปทุก helper ของ Electron แล้วพังทั้งแอป
 const CHILD_ENV = { ...process.env, ELECTRON_RUN_AS_NODE: '1' };
 
+const path = require('node:path');
+
 const DEFAULT_MODEL = 'claude-opus-5';
 const DEFAULT_EFFORT = 'high';
+
+// โฟลเดอร์ทำงานของบทสนทนา — แยกเป็นของ Cobik เอง
+// SDK เก็บ transcript เป็นไฟล์ .jsonl ใต้ ~/.claude/projects/<โฟลเดอร์นี้>/ ให้อยู่แล้ว
+// เราจึง "ไม่เก็บซ้ำ" — อ่านรายการผ่าน listSessions() ของ SDK ตรง ๆ
+let WORKDIR = process.cwd();
+function setWorkdir(p) { WORKDIR = p; }
 
 let sdk = null;
 const getSdk = () => (sdk ||= require('@anthropic-ai/claude-agent-sdk'));
@@ -54,7 +62,7 @@ function userMessage(text) {
 }
 
 /** เปิดห้อง (ถ้ายังไม่มี) แล้วเริ่มวนอ่านเหตุการณ์จาก SDK ส่งออกทาง onEvent */
-function open(roomId, { base, token, model, effort, folders, onEvent }) {
+function open(roomId, { base, token, model, effort, folders, onEvent, resumeId }) {
   let room = rooms.get(roomId);
   if (room?.alive) return room;
 
@@ -66,11 +74,13 @@ function open(roomId, { base, token, model, effort, folders, onEvent }) {
     options: {
       model: model || DEFAULT_MODEL,
       effort: effort || DEFAULT_EFFORT,
+      cwd: WORKDIR,
       mcpServers: mcpConfig(base, token),
       permissionMode: 'bypassPermissions', // v1: ยังไม่เปิด Write/Bash ในเครื่อง — จะทำ prompt ขออนุญาตตอนเปิดโฟลเดอร์
       includePartialMessages: true,        // ← สตรีมทีละชิ้น
       env: CHILD_ENV,
       executable: 'node',
+      ...(resumeId ? { resume: resumeId } : {}),
       ...(folders?.length ? { additionalDirectories: folders } : {}),
     },
   });
@@ -197,4 +207,65 @@ function state(roomId = 'main') {
   };
 }
 
-module.exports = { send, stop, reset, setModel, models, warmup, state, DEFAULT_MODEL, DEFAULT_EFFORT };
+// ── บทสนทนาที่เก็บไว้ (อ่านจากที่ SDK เก็บอยู่แล้ว ไม่ได้เก็บซ้ำ) ──
+// "เก็บเข้ากรุ" = ติดแท็ก 'archived' ผ่าน tagSession — ไม่ได้ย้ายหรือคัดลอกไฟล์
+const ARCHIVE_TAG = 'archived';
+
+async function listChats({ archived = false } = {}) {
+  const { listSessions } = getSdk();
+  try {
+    const all = await listSessions({ dir: WORKDIR, limit: 200 });
+    return all
+      .filter((s) => (s.tag === ARCHIVE_TAG) === !!archived)
+      .map((s) => ({
+        id: s.sessionId,
+        title: s.customTitle || s.summary || s.firstPrompt || 'บทสนทนาไม่มีชื่อ',
+        at: s.lastModified,
+        size: s.fileSize || 0,
+        tag: s.tag || null,
+      }));
+  } catch { return []; }
+}
+
+async function chatAction(action, sessionId, value) {
+  const sdk = getSdk();
+  const opts = { dir: WORKDIR };
+  try {
+    if (action === 'rename')  await sdk.renameSession(sessionId, value, opts);
+    if (action === 'archive') await sdk.tagSession(sessionId, ARCHIVE_TAG, opts);
+    if (action === 'restore') await sdk.tagSession(sessionId, null, opts);
+    if (action === 'delete')  await sdk.deleteSession(sessionId, opts);
+    return true;
+  } catch (e) { return { error: e?.message || String(e) }; }
+}
+
+/** เปิดบทสนทนาเก่าขึ้นมาคุยต่อ — คืนข้อความเดิมให้แผงวาด */
+async function openChat(roomId, sessionId, opts) {
+  reset(roomId);
+  const { getSessionMessages } = getSdk();
+  let history = [];
+  try {
+    const msgs = await getSessionMessages(sessionId, { dir: WORKDIR });
+    history = (msgs || []).map((m) => {
+      if (m.type === 'user') {
+        const c = m.message?.content;
+        const text = typeof c === 'string' ? c : (c || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+        return text.trim() ? { role: 'user', text: text.replace(/^\[ผู้ใช้กำลังดู:[^\]]*\]\s*/, '') } : null;
+      }
+      if (m.type === 'assistant') {
+        const text = (m.message?.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
+        return text.trim() ? { role: 'assistant', text } : null;
+      }
+      return null;
+    }).filter(Boolean);
+  } catch { /* อ่านไม่ได้ก็เปิดห้องเปล่า */ }
+
+  open(roomId, { ...opts, resumeId: sessionId });
+  return history;
+}
+
+module.exports = {
+  send, stop, reset, setModel, models, warmup, state, setWorkdir,
+  listChats, chatAction, openChat,
+  DEFAULT_MODEL, DEFAULT_EFFORT,
+};

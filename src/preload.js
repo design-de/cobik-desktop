@@ -37,6 +37,17 @@ contextBridge.exposeInMainWorld('cobik', {
 
   // ── คุยกับ Claude ──
   warmup: () => ipcRenderer.invoke('cobik:warmup'),
+
+  // ── บทสนทนาที่เก็บไว้ ──
+  chats: {
+    list: (archived) => ipcRenderer.invoke('cobik:chats', archived),
+    open: (id) => ipcRenderer.invoke('cobik:chat-open', id),
+    rename: (id, value) => ipcRenderer.invoke('cobik:chat-action', { action: 'rename', id, value }),
+    archive: (id) => ipcRenderer.invoke('cobik:chat-action', { action: 'archive', id }),
+    restore: (id) => ipcRenderer.invoke('cobik:chat-action', { action: 'restore', id }),
+    remove: (id) => ipcRenderer.invoke('cobik:chat-action', { action: 'delete', id }),
+  },
+
   ask: (prompt, context, model, effort) => ipcRenderer.invoke('cobik:ask', { prompt, context, model, effort }),
   stop: () => ipcRenderer.invoke('cobik:stop'),
   newChat: () => ipcRenderer.invoke('cobik:new-chat'),

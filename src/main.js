@@ -182,6 +182,21 @@ ipcMain.handle('cobik:warmup', async () => {
   }
 });
 
+// ── บทสนทนาที่เก็บไว้ ──
+async function authed() {
+  const rec = await oauth.connect(TARGET, { interactive: false });
+  return rec ? { base: TARGET, token: rec.access_token, folders, onEvent: toPanel } : null;
+}
+
+ipcMain.handle('cobik:chats', (_e, archived) => agent.listChats({ archived }));
+ipcMain.handle('cobik:chat-action', (_e, { action, id, value }) => agent.chatAction(action, id, value));
+ipcMain.handle('cobik:chat-open', async (_e, id) => {
+  const o = await authed();
+  if (!o) return { ok: false, error: 'not_connected' };
+  const history = await agent.openChat('main', id, o);
+  return { ok: true, history };
+});
+
 ipcMain.handle('cobik:stop', () => agent.stop('main'));
 ipcMain.handle('cobik:new-chat', () => { agent.reset('main'); return true; });
 ipcMain.handle('cobik:agent-state', () => agent.state('main'));

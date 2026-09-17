@@ -129,18 +129,55 @@
   .sdot { width:6px; height:6px; border-radius:99px; flex-shrink:0; }
   .sdot.on{background:var(--ok)} .sdot.off{background:var(--ink-mute)}
 
+  /* ── หน้ารายการบทสนทนา ── */
+  .chats { position:absolute; inset:0; background:var(--bg); z-index:30; display:flex; flex-direction:column; }
+  .chats[hidden] { display:none; }
+  .chats-list { flex:1; overflow-y:auto; padding:8px; }
+  .chat-row { display:flex; align-items:center; gap:8px; width:100%; padding:9px 10px; border-radius:var(--r);
+              background:none; border:none; color:var(--ink); text-align:left; }
+  .chat-row:hover { background:var(--raised); }
+  .chat-row.on { background:var(--raised-2); }
+  .chat-row .cn { flex:1; min-width:0; }
+  .chat-row .ct { font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chat-row .cs { font-size:10.5px; color:var(--ink-mute); margin-top:2px; }
+  .chat-row .ca { display:none; gap:2px; flex-shrink:0; }
+  .chat-row:hover .ca { display:flex; }
+  .ca button { background:none; border:none; color:var(--ink-mute); padding:3px; border-radius:5px; display:flex; }
+  .ca button:hover { color:var(--ink); background:rgba(255,255,255,.08); }
+  .chats-tabs { display:flex; gap:4px; padding:8px 10px 0; }
+  .ctab { font-size:11.5px; padding:4px 10px; border-radius:7px; background:none; border:1px solid transparent; color:var(--ink-mute); }
+  .ctab.on { background:var(--raised); border-color:var(--line); color:var(--ink); }
+  .chats-foot { padding:8px 12px; border-top:1px solid var(--line); font-size:10.5px; color:var(--ink-mute);
+                display:flex; justify-content:space-between; }
+
   .foot-note { font-size:10.5px; color:var(--ink-mute); margin-top:6px; display:flex; justify-content:space-between; gap:8px; }
 </style>
 </head>
 <body>
   <header>
+    <button class="hbtn" id="b-list" title="บทสนทนาทั้งหมด"></button>
     <span class="dot" id="dot"></span>
     <h1>Cobik</h1>
     <span class="ctx" id="ctx">—</span>
-    <button class="hbtn" id="b-new">ใหม่</button>
+    <button class="hbtn" id="b-new" title="บทสนทนาใหม่"></button>
   </header>
 
   <main id="log"></main>
+
+  <div class="chats" id="chats" hidden>
+    <header>
+      <button class="hbtn" id="b-back"></button>
+      <h1>บทสนทนาทั้งหมด</h1>
+      <span class="spacer" style="margin-left:auto"></span>
+      <button class="hbtn" id="b-new2"></button>
+    </header>
+    <div class="chats-tabs">
+      <button class="ctab on" data-tab="active">ที่ใช้อยู่</button>
+      <button class="ctab" data-tab="archived">กรุ</button>
+    </div>
+    <div class="chats-list" id="chats-list"></div>
+    <div class="chats-foot"><span id="chats-count"></span><span id="chats-size"></span></div>
+  </div>
 
   <footer>
     <div class="menu" id="menu" hidden></div>
@@ -384,6 +421,72 @@ function effortMenu() {
   }))]);
 }
 
+
+// ── หน้ารายการบทสนทนา ──
+let chatsTab = 'active';
+
+const ago = (t) => {
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return 'เมื่อครู่';
+  if (m < 60) return m + ' นาทีที่แล้ว';
+  const h = Math.round(m / 60);
+  if (h < 24) return h + ' ชั่วโมงที่แล้ว';
+  const d = Math.round(h / 24);
+  return d < 30 ? d + ' วันที่แล้ว' : new Date(t).toLocaleDateString('th-TH');
+};
+const kb = (b) => b < 1024 ? b + ' B' : b < 1048576 ? Math.round(b/1024) + ' KB' : (b/1048576).toFixed(1) + ' MB';
+
+async function renderChats() {
+  const list = $('chats-list');
+  const rows = await window.cobik.chats.list(chatsTab === 'archived');
+  list.innerHTML = '';
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty" style="padding:28px 0">${chatsTab === 'archived' ? 'กรุยังว่าง' : 'ยังไม่มีบทสนทนา'}</div>`;
+  }
+  let total = 0;
+  rows.forEach((c) => {
+    total += c.size || 0;
+    const b = document.createElement('button');
+    b.className = 'chat-row';
+    b.innerHTML = `<span class="cn"><span class="ct"></span><span class="cs"></span></span><span class="ca"></span>`;
+    b.querySelector('.ct').textContent = c.title;
+    b.querySelector('.cs').textContent = ago(c.at) + (c.size ? ' · ' + kb(c.size) : '');
+    const act = b.querySelector('.ca');
+
+    const mk = (ic, title, fn) => {
+      const x = document.createElement('button');
+      x.innerHTML = icon(ic, 13); x.title = title;
+      x.onclick = async (e) => { e.stopPropagation(); await fn(); renderChats(); };
+      act.appendChild(x);
+    };
+    mk('pencil', 'เปลี่ยนชื่อ', async () => {
+      const v = prompt('ชื่อบทสนทนา', c.title);
+      if (v && v.trim()) await window.cobik.chats.rename(c.id, v.trim());
+    });
+    if (chatsTab === 'archived') {
+      mk('refresh', 'เอาออกจากกรุ', () => window.cobik.chats.restore(c.id));
+      mk('x', 'ลบถาวร', async () => { if (confirm('ลบบทสนทนานี้ถาวร?')) await window.cobik.chats.remove(c.id); });
+    } else {
+      mk('folder', 'เก็บเข้ากรุ', () => window.cobik.chats.archive(c.id));
+    }
+
+    b.onclick = async () => {
+      const r = await window.cobik.chats.open(c.id);
+      if (!r.ok) { add('note', '⚠ เปิดไม่ได้: ' + r.error); return; }
+      log.innerHTML = '';
+      (r.history || []).forEach((m) => add('msg ' + (m.role === 'user' ? 'me' : 'ai'), m.text));
+      if (!r.history?.length) showEmpty();
+      closeChats(); input.focus();
+    };
+    list.appendChild(b);
+  });
+  $('chats-count').textContent = rows.length + ' บทสนทนา';
+  $('chats-size').textContent = total ? 'รวม ' + kb(total) : '';
+}
+
+function openChats() { $('chats').hidden = false; renderChats(); }
+function closeChats() { $('chats').hidden = true; }
+
 function showEmpty() {
   log.innerHTML = '';
   const d = document.createElement('div');
@@ -449,7 +552,10 @@ async function submit() {
 (async () => {
   $('b-plus').innerHTML = icon('plus', 15);
   $('b-send').innerHTML = icon('arrowUp', 15);
-  $('b-new').innerHTML = `<span class="ico">${icon('refresh',12)}</span>ใหม่`;
+  $('b-new').innerHTML = icon('plus', 13);
+  $('b-new2').innerHTML = icon('plus', 13);
+  $('b-list').innerHTML = icon('chevronRight', 13).replace('class="ic"', 'class="ic" style="transform:rotate(180deg)"');
+  $('b-back').innerHTML = icon('chevronRight', 13).replace('class="ic"', 'class="ic" style="transform:rotate(180deg)"');
 
   if (!window.cobik) { $('dot').className='dot bad'; add('note','ไม่พบสะพานของเปลือก'); return; }
 
@@ -495,10 +601,20 @@ async function submit() {
   $('b-plus').onclick = (e) => { e.stopPropagation(); menu.hidden ? plusMenu() : closeMenu(); };
   $('p-model').onclick = (e) => { e.stopPropagation(); menu.hidden ? modelMenu() : closeMenu(); };
   $('p-effort').onclick = (e) => { e.stopPropagation(); menu.hidden ? effortMenu() : closeMenu(); };
-  $('b-new').onclick = async () => {
+  const newChat = async () => {
     await window.cobik.newChat(); totalCost = 0; $('cost').textContent = '';
-    setBusy(false); showEmpty(); warmup();
+    setBusy(false); closeChats(); showEmpty(); warmup(); input.focus();
   };
+  $('b-new').onclick = newChat;
+  $('b-new2').onclick = newChat;
+  $('b-list').onclick = openChats;
+  $('b-back').onclick = closeChats;
+  document.querySelectorAll('.ctab').forEach((t) => {
+    t.onclick = () => {
+      document.querySelectorAll('.ctab').forEach((x) => x.classList.remove('on'));
+      t.classList.add('on'); chatsTab = t.dataset.tab; renderChats();
+    };
+  });
 
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
