@@ -1,7 +1,7 @@
 // Cobik Desktop — main process
 // หน้าต่างเดียว แบ่งสองฝั่ง: ซ้าย = เว็บ Cowork ของจริง · ขวา = แผง Claude
 // ทั้งสองฝั่งเป็น WebContentsView คนละตัว → เว็บแอปไม่ต้องรู้จักแผง และแผงไม่ต้องเบียดเว็บ
-const { app, BrowserWindow, WebContentsView, ipcMain, session } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, session, dialog } = require('electron');
 const path = require('node:path');
 const oauth = require('./oauth');
 const agent = require('./agent');
@@ -113,10 +113,43 @@ ipcMain.handle('cobik:auth-connect', async () => {
 
 ipcMain.handle('cobik:auth-clear', () => { oauth.clear(); agent.reset(); return true; });
 
-// ── ถาม Claude ──
-ipcMain.handle('cobik:ask', async (_e, { prompt, context }) => {
-  if (agent.isRunning()) return { ok: false, error: 'กำลังทำงานอยู่' };
+// ── โฟลเดอร์ในเครื่อง + ไฟล์แนบ ──
+// เก็บไว้ในหน่วยความจำของรอบนี้ก่อน (เฟสถัดไปจะจำต่อโปรเจกต์)
+let folders = [];
 
+ipcMain.handle('cobik:folders-list', () => folders);
+
+ipcMain.handle('cobik:folders-add', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'เลือกโฟลเดอร์ให้ Claude อ่านได้',
+    properties: ['openDirectory', 'multiSelections', 'createDirectory'],
+  });
+  if (r.canceled) return folders;
+  for (const p of r.filePaths) if (!folders.includes(p)) folders.push(p);
+  agent.reset(); // โฟลเดอร์เป็นค่าตอนเปิด session → ต้องเปิดห้องใหม่ให้มีผล
+  return folders;
+});
+
+ipcMain.handle('cobik:folders-remove', (_e, p) => {
+  folders = folders.filter((f) => f !== p);
+  agent.reset();
+  return folders;
+});
+
+ipcMain.handle('cobik:pick-files', async () => {
+  const r = await dialog.showOpenDialog(win, {
+    title: 'แนบไฟล์',
+    properties: ['openFile', 'multiSelections'],
+  });
+  return r.canceled ? [] : r.filePaths;
+});
+
+// ── ถาม Claude ──
+function toPanel(ev) {
+  if (panelView && !panelView.webContents.isDestroyed()) panelView.webContents.send('cobik:agent', ev);
+}
+
+ipcMain.handle('cobik:ask', async (_e, { prompt, context, model, effort }) => {
   let rec;
   try {
     rec = await oauth.connect(TARGET, { interactive: false });
@@ -125,12 +158,21 @@ ipcMain.handle('cobik:ask', async (_e, { prompt, context }) => {
     return { ok: false, error: e?.message || 'ต่ออายุสิทธิ์ไม่สำเร็จ' };
   }
 
-  const send = (ev) => { if (panelView && !panelView.webContents.isDestroyed()) panelView.webContents.send('cobik:agent', ev); };
-  const r = await agent.ask({ base: TARGET, token: rec.access_token, prompt, context, onEvent: send });
-  return { ok: !r.error, error: r.error || null };
+  try {
+    const r = agent.send('main', prompt, {
+      base: TARGET, token: rec.access_token, context, model, effort, folders, onEvent: toPanel,
+    });
+    return { ok: true, ...r };
+  } catch (e) {
+    return { ok: false, error: e?.message || String(e) };
+  }
 });
 
-ipcMain.handle('cobik:new-chat', () => { agent.reset(); return true; });
+ipcMain.handle('cobik:stop', () => agent.stop('main'));
+ipcMain.handle('cobik:new-chat', () => { agent.reset('main'); return true; });
+ipcMain.handle('cobik:agent-state', () => agent.state('main'));
+ipcMain.handle('cobik:set-model', (_e, m) => agent.setModel('main', m));
+ipcMain.handle('cobik:models', () => agent.models('main'));
 
 app.whenReady().then(() => {
   // ให้ session ของ partition นี้ใช้ user-agent ปกติ (บางเว็บกันบล็อก webview)

@@ -27,9 +27,21 @@ contextBridge.exposeInMainWorld('cobik', {
     clear: () => ipcRenderer.invoke('cobik:auth-clear'),
   },
 
+  // ── โฟลเดอร์ + ไฟล์ ──
+  folders: {
+    list: () => ipcRenderer.invoke('cobik:folders-list'),
+    add: () => ipcRenderer.invoke('cobik:folders-add'),
+    remove: (p) => ipcRenderer.invoke('cobik:folders-remove', p),
+  },
+  pickFiles: () => ipcRenderer.invoke('cobik:pick-files'),
+
   // ── คุยกับ Claude ──
-  ask: (prompt, context) => ipcRenderer.invoke('cobik:ask', { prompt, context }),
+  ask: (prompt, context, model, effort) => ipcRenderer.invoke('cobik:ask', { prompt, context, model, effort }),
+  stop: () => ipcRenderer.invoke('cobik:stop'),
   newChat: () => ipcRenderer.invoke('cobik:new-chat'),
+  agentState: () => ipcRenderer.invoke('cobik:agent-state'),
+  setModel: (m) => ipcRenderer.invoke('cobik:set-model', m),
+  models: () => ipcRenderer.invoke('cobik:models'),
   onAgent: (cb) => {
     const h = (_e, ev) => cb(ev);
     ipcRenderer.on('cobik:agent', h);

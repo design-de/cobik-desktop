@@ -5,43 +5,47 @@
 <title>Cobik</title>
 <style>
   :root {
-    --bg:#17171a; --raised:#1f1f23; --line:#2e2e34; --line-soft:#26262b;
+    --bg:#17171a; --raised:#1f1f23; --raised-2:#26262c; --line:#2e2e34; --line-soft:#26262b;
     --ink:#ececef; --ink-soft:#a6a6ae; --ink-mute:#74747d;
     --accent:#4f7cff; --ok:#3fb950; --err:#f06a5d; --warn:#d9a441;
   }
-  * { box-sizing: border-box; }
+  * { box-sizing:border-box; }
   body {
-    margin:0; height:100vh; display:flex; flex-direction:column;
+    margin:0; height:100vh; display:flex; flex-direction:column; overflow:hidden;
     background:var(--bg); color:var(--ink);
     font:13px/1.55 -apple-system,"SF Pro Text","IBM Plex Sans Thai",sans-serif;
-    border-left:1px solid var(--line); overflow:hidden;
+    border-left:1px solid var(--line);
   }
-  header {
-    -webkit-app-region:drag; padding:10px 14px; border-bottom:1px solid var(--line);
-    display:flex; align-items:center; gap:8px; flex-shrink:0;
-  }
+  button { font:inherit; cursor:pointer; }
+
+  header { -webkit-app-region:drag; padding:10px 14px; border-bottom:1px solid var(--line);
+           display:flex; align-items:center; gap:8px; flex-shrink:0; }
   .dot { width:7px; height:7px; border-radius:99px; background:var(--ink-mute); flex-shrink:0; }
   .dot.on{background:var(--ok)} .dot.bad{background:var(--err)} .dot.busy{background:var(--warn)}
-  h1 { font-size:13px; font-weight:600; margin:0; letter-spacing:.2px; }
+  h1 { font-size:13px; font-weight:600; margin:0; }
   .ctx { font-size:11px; color:var(--ink-mute); margin-left:auto; -webkit-app-region:no-drag;
-         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52%; }
-  .hbtn { -webkit-app-region:no-drag; font:inherit; font-size:11px; padding:2px 8px; border-radius:6px;
-          background:transparent; color:var(--ink-mute); border:1px solid var(--line); cursor:pointer; }
+         white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:50%; }
+  .hbtn { -webkit-app-region:no-drag; font-size:11px; padding:2px 8px; border-radius:6px;
+          background:transparent; color:var(--ink-mute); border:1px solid var(--line); }
   .hbtn:hover { color:var(--ink); border-color:var(--accent); }
 
-  main { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; }
-  main::-webkit-scrollbar { width:8px } main::-webkit-scrollbar-thumb { background:var(--line); border-radius:9px }
+  main { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:9px; }
+  main::-webkit-scrollbar{width:8px} main::-webkit-scrollbar-thumb{background:var(--line);border-radius:9px}
 
   .msg { max-width:92%; padding:8px 11px; border-radius:11px; white-space:pre-wrap; word-break:break-word; }
   .me { align-self:flex-end; background:var(--accent); color:#fff; }
   .ai { align-self:flex-start; background:var(--raised); border:1px solid var(--line-soft); }
+  .ai.streaming::after { content:'▍'; opacity:.6; animation:blink 1s steps(2) infinite; }
+  @keyframes blink { 50%{opacity:0} }
 
-  .tool { align-self:flex-start; font-size:11px; color:var(--ink-mute); display:flex; align-items:center; gap:6px;
-          padding:2px 2px; max-width:92%; }
+  .think { align-self:flex-start; max-width:92%; font-size:11.5px; color:var(--ink-mute);
+           border-left:2px solid var(--line); padding:2px 0 2px 9px; white-space:pre-wrap; font-style:italic; }
+  .tool { align-self:flex-start; font-size:11px; color:var(--ink-mute); display:flex; gap:6px;
+          align-items:baseline; max-width:92%; }
   .tool code { background:var(--raised); padding:1px 6px; border-radius:5px; color:var(--ink-soft); font-size:10.5px; }
   .tool.err { color:var(--err); }
+  .note { font-size:11px; color:var(--ink-mute); text-align:center; padding:3px 0; }
 
-  .note { font-size:11px; color:var(--ink-mute); text-align:center; padding:4px 0; }
   .empty { margin:auto; text-align:center; color:var(--ink-mute); font-size:12px; line-height:1.9; }
   .empty b { color:var(--ink-soft); font-weight:600; display:block; margin-bottom:6px; font-size:13px; }
   .empty .ex { display:inline-block; margin:3px; padding:4px 10px; border:1px solid var(--line);
@@ -50,22 +54,49 @@
 
   .connect { background:var(--raised); border:1px solid var(--line); border-radius:11px; padding:16px; text-align:center; }
   .connect p { margin:0 0 12px; color:var(--ink-soft); font-size:12px; line-height:1.7; }
-  .primary { font:inherit; font-weight:600; padding:7px 16px; border-radius:8px; border:none;
-             background:var(--accent); color:#fff; cursor:pointer; }
+  .primary { font-weight:600; padding:7px 16px; border-radius:8px; border:none; background:var(--accent); color:#fff; }
 
-  footer { padding:10px 14px 12px; border-top:1px solid var(--line); flex-shrink:0; }
-  .box { display:flex; gap:8px; align-items:flex-end; }
+  /* ── ช่องพิมพ์ ── */
+  footer { border-top:1px solid var(--line); flex-shrink:0; padding:9px 12px 10px; position:relative; }
+  .chips { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:7px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; font-size:11px; padding:3px 7px;
+          background:var(--raised); border:1px solid var(--line); border-radius:7px; color:var(--ink-soft); }
+  .chip button { background:none; border:none; color:var(--ink-mute); padding:0 1px; font-size:13px; line-height:1; }
+  .chip button:hover { color:var(--err); }
+
   textarea {
-    flex:1; min-height:38px; max-height:150px; resize:none; padding:9px 11px;
-    background:var(--raised); color:var(--ink); border:1px solid var(--line);
-    border-radius:9px; font:inherit;
+    width:100%; min-height:34px; max-height:160px; resize:none; padding:7px 2px;
+    background:transparent; color:var(--ink); border:none; font:inherit;
   }
-  textarea:focus { outline:none; border-color:var(--accent); }
-  textarea:disabled { opacity:.5 }
-  .send { font:inherit; padding:9px 13px; border-radius:9px; border:none; background:var(--accent);
-          color:#fff; cursor:pointer; flex-shrink:0; }
-  .send:disabled { opacity:.4; cursor:default }
-  .foot-note { font-size:10.5px; color:var(--ink-mute); margin-top:7px; display:flex; justify-content:space-between; gap:8px; }
+  textarea:focus { outline:none; }
+  textarea::placeholder { color:var(--ink-mute); }
+
+  .bar { display:flex; align-items:center; gap:6px; margin-top:4px; }
+  .pill { font-size:11.5px; padding:3px 9px; border-radius:7px; background:transparent;
+          border:1px solid transparent; color:var(--ink-soft); display:inline-flex; align-items:center; gap:5px; }
+  .pill:hover { background:var(--raised); }
+  .spacer { margin-left:auto; }
+  .icon-btn { width:28px; height:28px; border-radius:8px; border:1px solid var(--line);
+              background:var(--raised); color:var(--ink-soft); display:grid; place-items:center; font-size:15px; }
+  .icon-btn:hover { border-color:var(--accent); color:var(--ink); }
+  .icon-btn.go { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .icon-btn.stop { background:var(--err); border-color:var(--err); color:#fff; }
+
+  /* ── เมนู + ── */
+  .menu { position:absolute; bottom:52px; right:12px; min-width:230px; z-index:20;
+          background:var(--raised-2); border:1px solid var(--line); border-radius:11px;
+          padding:5px; box-shadow:0 12px 34px rgba(0,0,0,.5); }
+  .menu[hidden] { display:none; }
+  .mi { display:flex; align-items:center; gap:10px; width:100%; padding:7px 10px; border-radius:8px;
+        background:none; border:none; color:var(--ink); text-align:left; font-size:12.5px; }
+  .mi:hover { background:rgba(255,255,255,.06); }
+  .mi .k { margin-left:auto; color:var(--ink-mute); font-size:11px; }
+  .mi:disabled { color:var(--ink-mute); cursor:default; }
+  .mi:disabled:hover { background:none; }
+  .msep { height:1px; background:var(--line); margin:5px 2px; }
+  .mhead { font-size:10.5px; color:var(--ink-mute); padding:6px 10px 3px; text-transform:uppercase; letter-spacing:.5px; }
+
+  .foot-note { font-size:10.5px; color:var(--ink-mute); margin-top:6px; display:flex; justify-content:space-between; gap:8px; }
 </style>
 </head>
 <body>
@@ -79,10 +110,19 @@
   <main id="log"></main>
 
   <footer>
-    <div class="box">
-      <textarea id="input" rows="1" placeholder="ถาม Claude เรื่องงานนี้…"></textarea>
-      <button class="send" id="send">ส่ง</button>
+    <div class="menu" id="menu" hidden></div>
+
+    <div class="chips" id="chips"></div>
+    <textarea id="input" rows="1" placeholder="ถามหรือสั่งงาน… / สำหรับ skill, @ สำหรับไฟล์"></textarea>
+
+    <div class="bar">
+      <button class="pill" id="p-model">✳︎ <span id="model-name">Opus 5</span></button>
+      <button class="pill" id="p-effort"><span id="effort-name">High</span></button>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="b-plus" title="แนบไฟล์ / โฟลเดอร์ / skill">＋</button>
+      <button class="icon-btn go" id="b-send" title="ส่ง (Enter)">↑</button>
     </div>
+
     <div class="foot-note">
       <span id="tools">—</span>
       <span id="cost"></span>
@@ -91,32 +131,135 @@
 
 <script>
 const $ = (id) => document.getElementById(id);
-const log = $('log'), input = $('input'), send = $('send');
+const log = $('log'), input = $('input'), menu = $('menu');
 let webUrl = '', busy = false, connected = false, totalCost = 0;
+let folders = [], attached = [], servers = [];
+let model = 'claude-opus-5', effort = 'high';
+let streamEl = null, thinkEl = null;
+
+const MODELS = [
+  { id: 'claude-opus-5',   label: 'Opus 5',   note: 'ฉลาดที่สุด' },
+  { id: 'claude-sonnet-5', label: 'Sonnet 5', note: 'เร็ว ถูกกว่า' },
+  { id: 'claude-haiku-4-5',label: 'Haiku 4.5',note: 'เร็วที่สุด งานง่าย' },
+];
+const EFFORTS = [
+  { id: 'low',    label: 'Low',    note: 'ตอบไว ไม่คิดมาก' },
+  { id: 'medium', label: 'Medium', note: '' },
+  { id: 'high',   label: 'High',   note: 'สมดุล (แนะนำ)' },
+  { id: 'xhigh',  label: 'X-High', note: 'คิดหนัก งานยาก' },
+  { id: 'max',    label: 'Max',    note: 'คิดหนักที่สุด ช้าและแพง' },
+];
 
 const short = (u) => { try { const x = new URL(u); return x.pathname + x.search; } catch { return u || '—'; } };
-const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+const base = (p) => p.split('/').filter(Boolean).pop() || p;
+const atBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 70;
 const toBottom = () => { log.scrollTop = log.scrollHeight; };
 
 function add(cls, text) {
   const stick = atBottom();
   const d = document.createElement('div');
-  d.className = cls; d.textContent = text;
+  d.className = cls; d.textContent = text || '';
   log.appendChild(d); if (stick) toBottom();
   return d;
 }
 
-function addTool(name, input) {
+function addTool(name, args) {
   const stick = atBottom();
   const d = document.createElement('div');
   d.className = 'tool';
-  const pretty = String(name).replace(/^mcp__cobik__/, '');
-  const arg = input && Object.keys(input).length ? JSON.stringify(input).slice(0, 70) : '';
   d.innerHTML = '⚙︎ <code></code><span></span>';
-  d.querySelector('code').textContent = pretty;
-  d.querySelector('span').textContent = arg;
+  d.querySelector('code').textContent = String(name).replace(/^mcp__cobik__/, '');
+  d.querySelector('span').textContent = args && Object.keys(args).length ? JSON.stringify(args).slice(0, 70) : '';
   log.appendChild(d); if (stick) toBottom();
   return d;
+}
+
+function setDot() { $('dot').className = 'dot' + (busy ? ' busy' : connected ? ' on' : ' bad'); }
+
+function setBusy(b) {
+  busy = b; setDot();
+  const btn = $('b-send');
+  btn.className = 'icon-btn ' + (b ? 'stop' : 'go');
+  btn.textContent = b ? '■' : '↑';
+  btn.title = b ? 'หยุด' : 'ส่ง (Enter)';
+}
+
+function renderChips() {
+  const c = $('chips'); c.innerHTML = '';
+  folders.forEach((p) => {
+    const s = document.createElement('span'); s.className = 'chip';
+    s.innerHTML = '📁 <span></span><button title="เอาออก">×</button>';
+    s.querySelector('span').textContent = base(p);
+    s.title = p;
+    s.querySelector('button').onclick = async () => { folders = await window.cobik.folders.remove(p); renderChips(); add('note','เปลี่ยนโฟลเดอร์แล้ว — บทสนทนาเริ่มใหม่'); };
+    c.appendChild(s);
+  });
+  attached.forEach((p, i) => {
+    const s = document.createElement('span'); s.className = 'chip';
+    s.innerHTML = '📎 <span></span><button title="เอาออก">×</button>';
+    s.querySelector('span').textContent = base(p);
+    s.title = p;
+    s.querySelector('button').onclick = () => { attached.splice(i, 1); renderChips(); };
+    c.appendChild(s);
+  });
+}
+
+// ── เมนู ──
+function closeMenu() { menu.hidden = true; menu.innerHTML = ''; }
+function openMenu(items) {
+  menu.innerHTML = '';
+  items.forEach((it) => {
+    if (it.sep) { const d = document.createElement('div'); d.className = 'msep'; menu.appendChild(d); return; }
+    if (it.head) { const d = document.createElement('div'); d.className = 'mhead'; d.textContent = it.head; menu.appendChild(d); return; }
+    const b = document.createElement('button');
+    b.className = 'mi'; b.disabled = !!it.disabled;
+    b.innerHTML = '<span></span><span class="k"></span>';
+    b.querySelector('span').textContent = (it.icon ? it.icon + '  ' : '') + it.label;
+    b.querySelector('.k').textContent = it.hint || '';
+    if (!it.disabled) b.onclick = () => { closeMenu(); it.run?.(); };
+    menu.appendChild(b);
+  });
+  menu.hidden = false;
+}
+document.addEventListener('click', (e) => {
+  if (!menu.hidden && !menu.contains(e.target) && !e.target.closest('.pill,#b-plus')) closeMenu();
+});
+
+function plusMenu() {
+  openMenu([
+    { icon: '📎', label: 'แนบไฟล์', run: async () => {
+        const f = await window.cobik.pickFiles();
+        f.forEach((p) => { if (!attached.includes(p)) attached.push(p); });
+        renderChips();
+      } },
+    { icon: '📁', label: 'เพิ่มโฟลเดอร์ในเครื่อง', run: async () => {
+        folders = await window.cobik.folders.add();
+        renderChips();
+        if (folders.length) add('note', 'เพิ่มโฟลเดอร์แล้ว — บทสนทนาเริ่มใหม่เพื่อให้มีผล');
+      } },
+    { icon: '✦', label: 'Skills', hint: 'เร็ว ๆ นี้', disabled: true },
+    { sep: true },
+    { head: 'ต่ออยู่กับ' },
+    ...(servers.length
+      ? servers.map((s) => ({ icon: s.status === 'connected' ? '🟢' : '⚪️', label: s.name, disabled: true }))
+      : [{ label: 'ยังไม่ได้เริ่มบทสนทนา', disabled: true }]),
+  ]);
+}
+
+function modelMenu() {
+  openMenu([{ head: 'โมเดล' }, ...MODELS.map((m) => ({
+    icon: m.id === model ? '●' : '○', label: m.label + (m.note ? '  · ' + m.note : ''),
+    run: async () => { model = m.id; $('model-name').textContent = m.label; await window.cobik.setModel(m.id); },
+  }))]);
+}
+
+function effortMenu() {
+  openMenu([{ head: 'ระดับความคิด' }, ...EFFORTS.map((e) => ({
+    icon: e.id === effort ? '●' : '○', label: e.label + (e.note ? '  · ' + e.note : ''),
+    run: () => {
+      effort = e.id; $('effort-name').textContent = e.label;
+      add('note', 'ระดับความคิดจะมีผลกับบทสนทนาถัดไป'); },
+  }))]);
 }
 
 function showEmpty() {
@@ -124,13 +267,9 @@ function showEmpty() {
   const d = document.createElement('div');
   d.className = 'empty';
   d.innerHTML = '<b>ถามอะไรก็ได้เรื่องงาน</b>';
-  ['สรุปงานที่ค้างในโปรเจกต์นี้', 'ใครว่างสัปดาห์นี้บ้าง', 'มีงานอะไรเลยกำหนดแล้ว']
-    .forEach((t) => {
-      const s = document.createElement('span');
-      s.className = 'ex'; s.textContent = t;
-      s.onclick = () => { input.value = t; input.focus(); };
-      d.appendChild(s);
-    });
+  ['สรุปงานที่ค้างในโปรเจกต์นี้', 'ใครว่างสัปดาห์นี้บ้าง', 'งานไหนเลยกำหนดแล้วบ้าง']
+    .forEach((t) => { const s = document.createElement('span'); s.className = 'ex'; s.textContent = t;
+      s.onclick = () => { input.value = t; input.focus(); }; d.appendChild(s); });
   log.appendChild(d);
 }
 
@@ -146,30 +285,32 @@ function showConnect(err) {
     b.disabled = true; b.textContent = 'รออนุญาตในเบราว์เซอร์…';
     const r = await window.cobik.auth.connect();
     if (r.ok) { connected = true; setDot(); showEmpty(); input.focus(); }
-    else { showConnect(r.error === 'not_connected' ? '' : r.error); }
+    else showConnect(r.error);
   };
-  d.appendChild(b);
-  log.appendChild(d);
-}
-
-function setDot() {
-  $('dot').className = 'dot' + (busy ? ' busy' : connected ? ' on' : ' bad');
+  d.appendChild(b); log.appendChild(d);
 }
 
 async function submit() {
+  if (busy) { await window.cobik.stop(); return; }
   const text = input.value.trim();
-  if (!text || busy || !connected) return;
+  if (!text || !connected) return;
+
   input.value = ''; input.style.height = 'auto';
   if (log.querySelector('.empty')) log.innerHTML = '';
-  add('msg me', text);
 
-  busy = true; send.disabled = true; input.disabled = true; setDot();
-  const r = await window.cobik.ask(text, short(webUrl));
-  busy = false; send.disabled = false; input.disabled = false; setDot();
-  input.focus();
+  const files = attached.slice();
+  const full = files.length ? text + '\n\nไฟล์แนบ:\n' + files.map((f) => '- ' + f).join('\n') : text;
+  add('msg me', text + (files.length ? '\n📎 ' + files.map(base).join(', ') : ''));
+  attached = []; renderChips();
 
-  if (!r.ok && r.error === 'not_connected') { connected = false; setDot(); showConnect(); }
-  else if (!r.ok && r.error) add('note', '⚠ ' + r.error);
+  setBusy(true);
+  streamEl = null; thinkEl = null;
+  const r = await window.cobik.ask(full, short(webUrl), model, effort);
+  if (!r.ok) {
+    setBusy(false);
+    if (r.error === 'not_connected') { connected = false; setDot(); showConnect(); }
+    else add('note', '⚠ ' + r.error);
+  }
 }
 
 (async () => {
@@ -180,39 +321,62 @@ async function submit() {
   $('ctx').textContent = short(webUrl);
   window.cobik.onWebUrl((u) => { webUrl = u; $('ctx').textContent = short(u); });
 
+  folders = await window.cobik.folders.list(); renderChips();
+
   const auth = await window.cobik.auth.status();
-  connected = !!auth.connected;
-  setDot();
+  connected = !!auth.connected; setDot();
   connected ? showEmpty() : showConnect();
 
-  let streaming = null;
   window.cobik.onAgent((ev) => {
     if (ev.type === 'init') {
-      $('tools').textContent = 'เครื่องมือ ' + ev.toolCount + ' ตัว · ' + (ev.model || '');
-      streaming = null;
+      servers = ev.servers || [];
+      $('tools').textContent = 'เครื่องมือ ' + ev.toolCount + ' ตัว';
     }
-    if (ev.type === 'text') { streaming = add('msg ai', ev.text); }
-    if (ev.type === 'tool') { addTool(ev.name, ev.input); streaming = null; }
+    if (ev.type === 'thinking') {
+      if (!thinkEl) thinkEl = add('think', '');
+      thinkEl.textContent += ev.text; if (atBottom()) toBottom();
+    }
+    if (ev.type === 'delta') {
+      thinkEl = null;
+      if (!streamEl) { streamEl = add('msg ai streaming', ''); }
+      streamEl.textContent += ev.text; if (atBottom()) toBottom();
+    }
+    if (ev.type === 'tool_start' || ev.type === 'tool') {
+      if (streamEl) { streamEl.classList.remove('streaming'); streamEl = null; }
+      thinkEl = null;
+      if (ev.type === 'tool') addTool(ev.name, ev.input);
+    }
     if (ev.type === 'tool_result' && ev.isError) {
       const d = addTool('ผิดพลาด', null); d.className = 'tool err';
-      d.querySelector('span').textContent = ev.preview.slice(0, 120);
+      d.querySelector('span').textContent = (ev.preview || '').slice(0, 130);
     }
     if (ev.type === 'done') {
+      if (streamEl) { streamEl.classList.remove('streaming'); streamEl = null; }
+      thinkEl = null; setBusy(false);
       if (typeof ev.cost === 'number') { totalCost += ev.cost; $('cost').textContent = 'รวม $' + totalCost.toFixed(2); }
       if (ev.subtype && ev.subtype !== 'success') add('note', 'จบแบบ: ' + ev.subtype);
     }
-    if (ev.type === 'error') add('note', '⚠ ' + ev.message);
+    if (ev.type === 'error') { setBusy(false); add('note', '⚠ ' + ev.message); }
+    if (ev.type === 'closed') { setBusy(false); }
   });
 
-  send.onclick = submit;
+  $('b-send').onclick = submit;
+  $('b-plus').onclick = (e) => { e.stopPropagation(); menu.hidden ? plusMenu() : closeMenu(); };
+  $('p-model').onclick = (e) => { e.stopPropagation(); menu.hidden ? modelMenu() : closeMenu(); };
+  $('p-effort').onclick = (e) => { e.stopPropagation(); menu.hidden ? effortMenu() : closeMenu(); };
+  $('b-new').onclick = async () => {
+    await window.cobik.newChat(); totalCost = 0; $('cost').textContent = ''; setBusy(false); showEmpty();
+  };
+
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+    if (e.key === 'Escape' && !menu.hidden) closeMenu();
   });
   input.addEventListener('input', () => {
     input.style.height = 'auto';
-    input.style.height = Math.min(input.scrollHeight, 150) + 'px';
+    input.style.height = Math.min(input.scrollHeight, 160) + 'px';
   });
-  $('b-new').onclick = async () => { await window.cobik.newChat(); totalCost = 0; $('cost').textContent = ''; showEmpty(); };
+  input.focus();
 })();
 </script>
 </body>
