@@ -78,6 +78,10 @@ function startDrag() {
 }
 function stopDrag() { clearInterval(dragTimer); dragTimer = null; }
 
+function loadPanel() {
+  panelView?.webContents.loadURL(`${TARGET}/desktop/panel`);
+}
+
 function createWindow() {
   const prefs = loadPrefs();
   collapsed = prefs.collapsed !== false;              // ไม่เคยเปิดมาก่อน = หุบไว้
@@ -120,12 +124,12 @@ function createWindow() {
     },
   });
   win.contentView.addChildView(panelView);
-  // แผงเป็นหน้าของเว็บแล้ว (ได้ระบบดีไซน์ + tr() + cookie session)
-  // ไฟล์ src/panel/ เดิมเก็บไว้เป็นทางสำรองตอนเว็บล่ม
-  panelView.webContents.loadURL(`${TARGET}/desktop/panel`);
+  // แผงเป็นหน้าของเว็บ (ได้ระบบดีไซน์ + tr() + cookie session)
+  // src/panel/index.html เป็นหน้าสำรองตอนโหลดจากเว็บไม่ได้ — มีแค่ข้อความกับปุ่มลองใหม่
+  loadPanel();
   panelView.webContents.on('did-fail-load', (_e, code, desc, url) => {
     if (url.includes('/desktop/panel')) {
-      console.warn('โหลดแผงจากเว็บไม่สำเร็จ → ใช้แผงสำรองในเครื่อง:', code, desc);
+      console.warn('โหลดแผงจากเว็บไม่สำเร็จ → ใช้หน้าสำรอง:', code, desc);
       panelView.webContents.loadFile(path.join(__dirname, 'panel', 'index.html'));
     }
   });
@@ -175,6 +179,14 @@ ipcMain.handle('cobik:set-panel-width', (_e, w) => {
 
 ipcMain.handle('cobik:toggle-panel', (_e, v) => setCollapsed(v));
 ipcMain.handle('cobik:panel-open', () => !collapsed);
+
+// ปุ่ม "ลองใหม่" บนหน้าสำรอง — โหลดแผงจากเว็บอีกครั้ง
+// (reload หน้าสำรองเฉย ๆ จะได้หน้าสำรองซ้ำ ไม่ได้กลับไปลองของจริง)
+ipcMain.handle('cobik:retry-panel', async () => {
+  if (!panelView) return false;
+  try { await panelView.webContents.loadURL(`${TARGET}/desktop/panel`); return true; }
+  catch { return false; }   // did-fail-load จะพากลับไปหน้าสำรองเอง
+});
 ipcMain.handle('cobik:drag-start', () => { startDrag(); });
 ipcMain.handle('cobik:drag-end', () => { stopDrag(); savePrefs(); return panelWidth; });
 
