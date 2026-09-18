@@ -4,8 +4,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('cobik', {
   // v2 = โฟลเดอร์แยกตามโปรเจกต์ (folders.list คืนเป็น object) + คำถามขออนุญาต
+  // v3 = อัปเดตแอปจากในแอป
   // แผงอยู่บนเว็บ จึงเจอเปลือกรุ่นเก่าได้ → แผงต้องเช็คก่อนเรียกของใหม่เสมอ
-  version: 2,
+  version: 3,
 
   // สถานะเปลือก (ไว้ให้หน้าแผงเช็คว่าเวอร์ชันสะพานตรงกันไหม)
   getState: () => ipcRenderer.invoke('cobik:get-state'),
@@ -32,6 +33,19 @@ contextBridge.exposeInMainWorld('cobik', {
     const h = (_e, url) => cb(url);
     ipcRenderer.on('cobik:web-url', h);
     return () => ipcRenderer.removeListener('cobik:web-url', h);
+  },
+
+  // ── อัปเดตแอป ──
+  update: {
+    state: () => ipcRenderer.invoke('cobik:update-state'),
+    check: () => ipcRenderer.invoke('cobik:update-check'),
+    install: () => ipcRenderer.invoke('cobik:update-install'),
+    open: () => ipcRenderer.invoke('cobik:update-open'),
+    onState: (cb) => {
+      const h = (_e, v) => cb(v);
+      ipcRenderer.on('cobik:update', h);
+      return () => ipcRenderer.removeListener('cobik:update', h);
+    },
   },
 
   // ── สิทธิ์เข้า cobik ──

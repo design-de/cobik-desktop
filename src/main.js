@@ -6,6 +6,7 @@ const path = require('node:path');
 const oauth = require('./oauth');
 const agent = require('./agent');
 const store = require('./folders');
+const updater = require('./update');
 
 // skill 6 ตัวของ cobik ที่ติดมากับแอป (ดู scripts/sync-skills.mjs)
 // แอปไม่ได้ pack เป็น asar (ตั้งไว้ใน package.json) → ที่อยู่เดียวกันทั้งตอนพัฒนาและตอนเป็นแอปจริง
@@ -428,6 +429,17 @@ ipcMain.handle('cobik:set-model', (_e, m) => agent.setModel('main', m));
 ipcMain.handle('cobik:models', () => agent.models('main'));
 ipcMain.handle('cobik:commands', () => agent.commands('main'));
 
+// ── อัปเดตแอป ──
+// แผงเป็นคนแสดงผล เปลือกเป็นคนทำงาน — ทุกครั้งที่สถานะขยับ ส่งไปให้แผงทั้งก้อน
+updater.setNotifier((st) => {
+  panelView?.webContents.send('cobik:update', { ...updater.snapshot(), ...st });
+});
+
+ipcMain.handle('cobik:update-state', () => updater.snapshot());
+ipcMain.handle('cobik:update-check', async () => { await updater.check({ quiet: false }); return updater.snapshot(); });
+ipcMain.handle('cobik:update-install', () => updater.install());
+ipcMain.handle('cobik:update-open', () => { updater.openReleases(); return true; });
+
 function buildMenu() {
   const { Menu } = require('electron');
   const mac = process.platform === 'darwin';
@@ -446,6 +458,13 @@ function buildMenu() {
         { role: 'reload' }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' },
       ],
     },
+    {
+      label: 'ช่วยเหลือ',
+      submenu: [
+        { label: 'ตรวจหาเวอร์ชันใหม่…', click: async () => { await updater.check({ quiet: false }); setCollapsed(false); } },
+        { label: 'เปิดหน้าดาวน์โหลด', click: () => updater.openReleases() },
+      ],
+    },
     { role: 'windowMenu' },
   ]));
 }
@@ -453,6 +472,9 @@ function buildMenu() {
 app.whenReady().then(() => {
   buildMenu();
   store.init(app.getPath('userData'));
+  // เช็คเงียบ ๆ — ไม่มีรุ่นใหม่ก็ไม่ต้องบอกอะไร · ล้มเหลวก็ไม่ต้องบอก (เน็ตหลุดไม่ใช่เรื่องของผู้ใช้)
+  setTimeout(() => updater.check(), 8000);
+  setInterval(() => updater.check(), 6 * 60 * 60 * 1000);
   // ให้ session ของ partition นี้ใช้ user-agent ปกติ (บางเว็บกันบล็อก webview)
   session.fromPartition(PARTITION);
   createWindow();
