@@ -61,6 +61,7 @@
     },
     "dmg": {
       "title": "Cobik"
-    }
+    },
+    "afterPack": "scripts/after-pack.cjs"
   }
 }
