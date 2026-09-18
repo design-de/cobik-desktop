@@ -6,9 +6,19 @@ const path = require('node:path');
 const oauth = require('./oauth');
 const agent = require('./agent');
 
-const TARGET = process.env.COBIK_TARGET === 'local'
-  ? 'http://localhost:3000'
-  : 'https://cowork-app-tau.vercel.app';
+// ที่อยู่ของเว็บ — ลำดับ: ตัวแปรตอนรัน → ค่าที่จำไว้ (ui.json) → ค่าตั้งต้น
+//
+// ทำไมไม่ฝังตายตัว: ถ้าเปลี่ยนชื่อโปรเจกต์บน Vercel หรือย้ายไปโดเมนของตัวเอง
+// URL prod จะเปลี่ยน แล้วแอปที่แจกไปแล้วทุกเครื่องจะชี้ผิดทันที ต้องออกเวอร์ชันใหม่
+// ให้ทุกคนอัปเดต · เก็บไว้ในไฟล์ตั้งค่าแทน = แก้ได้โดยไม่ต้อง build ใหม่
+// (ทางที่ดีที่สุดคือผูกโดเมนของตัวเองให้เสร็จก่อน แล้ว URL จะไม่เปลี่ยนอีกเลย)
+const DEFAULT_URL = 'https://cowork-app-tau.vercel.app';
+let TARGET = DEFAULT_URL;
+function resolveTarget(prefs) {
+  if (process.env.COBIK_TARGET === 'local') return 'http://localhost:3000';
+  if (process.env.COBIK_URL) return process.env.COBIK_URL;
+  return prefs?.appUrl || DEFAULT_URL;
+}
 
 const PANEL_WIDTH = 420;
 const PANEL_MIN = 320;
@@ -30,7 +40,8 @@ function loadPrefs() {
 function savePrefs() {
   try {
     require('node:fs').mkdirSync(app.getPath('userData'), { recursive: true });
-    require('node:fs').writeFileSync(prefsFile(), JSON.stringify({ collapsed, panelWidth }));
+    const keep = loadPrefs();
+    require('node:fs').writeFileSync(prefsFile(), JSON.stringify({ ...keep, collapsed, panelWidth }));
   } catch {}
 }
 
@@ -84,6 +95,7 @@ function loadPanel() {
 
 function createWindow() {
   const prefs = loadPrefs();
+  TARGET = resolveTarget(prefs);
   collapsed = prefs.collapsed !== false;              // ไม่เคยเปิดมาก่อน = หุบไว้
   panelWidth = Number(prefs.panelWidth) || PANEL_WIDTH;
 

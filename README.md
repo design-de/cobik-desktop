@@ -9,9 +9,15 @@
 
 ```bash
 npm install
-npm start              # ต่อเว็บ prod
+npm start                        # ต่อเว็บ prod
 COBIK_TARGET=local npm run dev   # ต่อ localhost:3000 (ตอนแก้หน้าแผง)
+COBIK_URL=https://… npm start    # ชี้ที่อยู่อื่นชั่วคราว
 ```
+
+**ย้ายโดเมน/เปลี่ยนชื่อโปรเจกต์บน Vercel แล้ว URL เปลี่ยน?**
+แก้ `appUrl` ใน `~/Library/Application Support/cobik-desktop/ui.json` ได้เลย
+ไม่ต้อง build แอปใหม่ ไม่ต้องให้ทุกคนอัปเดต — ลำดับที่แอปใช้คือ
+`COBIK_TARGET=local` → `COBIK_URL` → `ui.json:appUrl` → ค่าตั้งต้นในโค้ด
 
 ### ⚠️ กับดัก: `ELECTRON_RUN_AS_NODE`
 
