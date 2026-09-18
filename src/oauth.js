@@ -11,7 +11,7 @@ const path = require('node:path');
 
 const b64url = (buf) => buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
-function storePath() { return path.join(app.getPath('userData'), 'cowork-auth.bin'); }
+function storePath() { return path.join(app.getPath('userData'), 'cobik-auth.bin'); }
 
 function save(obj) {
   const json = JSON.stringify(obj);

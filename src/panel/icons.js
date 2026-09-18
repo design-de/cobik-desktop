@@ -1,5 +1,5 @@
 // ไอคอน Lucide — เส้นทางจริงจาก lucide.dev คัดมาเฉพาะที่ใช้
-// แผงยังไม่มี bundler จึงฝัง path ไว้ตรงนี้ (แนวเดียวกับ components/icons.jsx ของ cowork-app)
+// แผงยังไม่มี bundler จึงฝัง path ไว้ตรงนี้ (แนวเดียวกับ components/icons.jsx ของ cobik-app)
 // กติกาเดียวกับของหลัก: stroke 2 · viewBox 24 · ไม่มี fill
 const P = {
   paperclip: 'M13.234 20.252 21 12.3M16 6l-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551',

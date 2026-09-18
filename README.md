@@ -3,7 +3,7 @@
 แอป Mac ที่เปิดมาเห็น **Cowork ทางซ้าย · Claude ทางขวา** — ฝัง Claude Agent SDK (Claude Code ในรูปไลบรารี)
 ล็อกอินด้วยบัญชี Claude ของผู้ใช้เอง ไม่ต้องมี API key
 
-แผนเต็ม: `cowork-app/docs/plans/cobik-desktop.md`
+แผนเต็ม: `cobik-app/docs/plans/cobik-desktop.md`
 
 ## รัน
 
@@ -42,7 +42,7 @@ env -u ELECTRON_RUN_AS_NODE npx electron .
 src/
   main.js            เปลือก: หน้าต่างเดียว แบ่ง WebContentsView สองตัว + ช่อง IPC
   preload.js         สะพาน window.cobik (v1) — หน้าแผงเห็นแค่นี้ ไม่มี node ดิบ
-  panel/index.html   แผงชั่วคราวสำหรับพัฒนา → จะย้ายไป cowork-app /desktop/panel
+  panel/index.html   แผงชั่วคราวสำหรับพัฒนา → จะย้ายไป cobik-app /desktop/panel
 ```
 
 **สะพาน v1** — `window.cobik`
@@ -78,9 +78,9 @@ cookie ของ Cowork อยู่ใน partition `persist:cobik` → ล็�
 
 ## ค้าง — ต้องทำก่อนใช้จริง
 
-1. **rebrand เป็น Cobik** ← ทำที่แชทอื่น (แผน `cowork-app/docs/plans/rebrand-cobik.md`)
+1. **rebrand เป็น Cobik** ← ทำที่แชทอื่น (แผน `cobik-app/docs/plans/rebrand-cobik.md`)
    ต้องเสร็จก่อน push ไม่งั้นแผงต้องมาแก้ชื่อซ้ำ
-2. **🔴 `cowork-app` มี 35 commit ยังไม่ push** — ในนั้น **21 commit เป็น design-system v2
+2. **🔴 `cobik-app` มี 35 commit ยังไม่ push** — ในนั้น **21 commit เป็น design-system v2
    (Tailwind v4 + Radix) ที่ session อื่นทำ ยังไม่มีใครตรวจ** แตะ globals.css / package.json /
    components/ui/* ทั้งชุด → ห้าม push โดยไม่ให้เจ้าของงานยืนยัน
 3. **push แล้วประกอบเป็น `Cobik.app`** — ตอนนี้รันจาก terminal เท่านั้น ผู้ใช้เปิดเองไม่ได้
