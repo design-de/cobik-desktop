@@ -202,8 +202,11 @@ async function models(roomId = 'main') {
 async function warmup(roomId, opts) {
   open(roomId, opts);
   const room = rooms.get(roomId);
-  // รอ init สักครู่ให้ CLI พร้อมก่อนถามรายชื่อโมเดล
-  for (let i = 0; i < 40 && !room.sessionId; i++) await new Promise((r) => setTimeout(r, 150));
+  // รอ init ให้ CLI พร้อมก่อนถามรายชื่อโมเดล
+  // 6 วิเดิมสั้นเกินไป: เปิดครั้งแรกต้อง spawn CLI + จับมือกับ MCP ด้วย
+  // ถ้าโทเคนหมดอายุ การจับมือจะค้างยาว → ต้องคืน error ให้แผงบอกผู้ใช้ ไม่ใช่เงียบ
+  for (let i = 0; i < 100 && !room.sessionId; i++) await new Promise((r) => setTimeout(r, 150));
+  if (!room.sessionId) return { timedOut: true, models: [], commands: [], state: state(roomId) };
   return { models: await models(roomId), commands: await commands(roomId), state: state(roomId) };
 }
 

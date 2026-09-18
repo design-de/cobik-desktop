@@ -356,6 +356,18 @@ function clearAsks() {
 // ── ถาม Claude ──
 function toPanel(ev) {
   if (panelView && !panelView.webContents.isDestroyed()) panelView.webContents.send('cobik:agent', ev);
+  // init มาถึง = session พร้อมจริง → ยิงรายชื่อโมเดล/skill ตามไปเลย
+  // ไม่ปล่อยให้แผงนั่งเดาเวลาเอง (ของเดิมรอ 6 วิแล้วยอมแพ้เงียบ ๆ)
+  if (ev?.type === 'init') pushCatalog();
+}
+
+async function pushCatalog() {
+  try {
+    const [models, commands] = await Promise.all([agent.models('main'), agent.commands('main')]);
+    if (models.length || commands.length) {
+      panelView?.webContents.send('cobik:agent', { type: 'catalog', models, commands });
+    }
+  } catch {}
 }
 
 ipcMain.handle('cobik:ask', async (_e, { prompt, context, model, effort }) => {
@@ -386,6 +398,7 @@ ipcMain.handle('cobik:warmup', async () => {
     const r = await agent.warmup('main', {
       base: TARGET, token: rec.access_token, folders: folders(), plugins, canUseTool, onEvent: toPanel,
     });
+    if (r.timedOut) return { ok: false, error: 'เชื่อมต่อนานผิดปกติ — ลองกดเชื่อมใหม่อีกครั้ง' };
     return { ok: true, ...r };
   } catch (e) {
     return { ok: false, error: e?.message || String(e) };
