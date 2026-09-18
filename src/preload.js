@@ -3,7 +3,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('cobik', {
-  version: 1,
+  // v2 = โฟลเดอร์แยกตามโปรเจกต์ (folders.list คืนเป็น object) + คำถามขออนุญาต
+  // แผงอยู่บนเว็บ จึงเจอเปลือกรุ่นเก่าได้ → แผงต้องเช็คก่อนเรียกของใหม่เสมอ
+  version: 2,
 
   // สถานะเปลือก (ไว้ให้หน้าแผงเช็คว่าเวอร์ชันสะพานตรงกันไหม)
   getState: () => ipcRenderer.invoke('cobik:get-state'),
@@ -32,7 +34,7 @@ contextBridge.exposeInMainWorld('cobik', {
     return () => ipcRenderer.removeListener('cobik:web-url', h);
   },
 
-  // ── สิทธิ์เข้า Cowork ──
+  // ── สิทธิ์เข้า cobik ──
   auth: {
     status: () => ipcRenderer.invoke('cobik:auth-status'),
     connect: () => ipcRenderer.invoke('cobik:auth-connect'),
@@ -40,10 +42,17 @@ contextBridge.exposeInMainWorld('cobik', {
   },
 
   // ── โฟลเดอร์ + ไฟล์ ──
+  // ทั้งสามตัวคืน { scope, folders } — ขอบเขตเปลี่ยนตามโปรเจกต์ที่เปิดอยู่ฝั่งซ้าย
   folders: {
     list: () => ipcRenderer.invoke('cobik:folders-list'),
     add: () => ipcRenderer.invoke('cobik:folders-add'),
     remove: (p) => ipcRenderer.invoke('cobik:folders-remove', p),
+    // ฝั่งซ้ายย้ายโปรเจกต์ → ชุดโฟลเดอร์เปลี่ยนเอง แผงไม่ต้องถามซ้ำ
+    onChange: (cb) => {
+      const h = (_e, v) => cb(v);
+      ipcRenderer.on('cobik:folders', h);
+      return () => ipcRenderer.removeListener('cobik:folders', h);
+    },
   },
   pickFiles: () => ipcRenderer.invoke('cobik:pick-files'),
 
@@ -61,6 +70,8 @@ contextBridge.exposeInMainWorld('cobik', {
   },
 
   ask: (prompt, context, model, effort) => ipcRenderer.invoke('cobik:ask', { prompt, context, model, effort }),
+  // ตอบคำถามขออนุญาต — answer: 'allow' | 'always' | 'deny'
+  answerAsk: (id, answer) => ipcRenderer.invoke('cobik:answer-ask', { id, answer }),
   stop: () => ipcRenderer.invoke('cobik:stop'),
   newChat: () => ipcRenderer.invoke('cobik:new-chat'),
   agentState: () => ipcRenderer.invoke('cobik:agent-state'),

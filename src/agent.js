@@ -62,7 +62,7 @@ function userMessage(text) {
 }
 
 /** เปิดห้อง (ถ้ายังไม่มี) แล้วเริ่มวนอ่านเหตุการณ์จาก SDK ส่งออกทาง onEvent */
-function open(roomId, { base, token, model, effort, folders, onEvent, resumeId }) {
+function open(roomId, { base, token, model, effort, folders, plugins, canUseTool, onEvent, resumeId }) {
   let room = rooms.get(roomId);
   if (room?.alive) return room;
 
@@ -76,7 +76,14 @@ function open(roomId, { base, token, model, effort, folders, onEvent, resumeId }
       effort: effort || DEFAULT_EFFORT,
       cwd: WORKDIR,
       mcpServers: mcpConfig(base, token),
-      permissionMode: 'bypassPermissions', // v1: ยังไม่เปิด Write/Bash ในเครื่อง — จะทำ prompt ขออนุญาตตอนเปิดโฟลเดอร์
+      // 'default' = เครื่องยนต์ถามก่อนทำสิ่งที่ย้อนกลับยาก (เขียนไฟล์ · รันคำสั่ง)
+      // แล้วโยนคำถามมาที่ canUseTool → เราส่งต่อให้แผงถามผู้ใช้เป็นภาษาคน
+      // (ของเดิมคือ bypassPermissions = ไม่ถามอะไรเลย ปลอดภัยเพราะยังไม่เปิด Write/Bash)
+      permissionMode: 'default',
+      ...(canUseTool ? { canUseTool } : {}),
+      // skill ของ cobik ติดมากับแอป — ทุกคนได้เหมือนกันโดยไม่ต้องติดตั้งเอง
+      // skills:'all' = เปิดทั้ง skill ที่ติดมากับแอปและ skill ส่วนตัวของผู้ใช้เอง
+      ...(plugins?.length ? { plugins, skills: 'all' } : {}),
       includePartialMessages: true,        // ← สตรีมทีละชิ้น
       env: CHILD_ENV,
       executable: 'node',
@@ -85,7 +92,11 @@ function open(roomId, { base, token, model, effort, folders, onEvent, resumeId }
     },
   });
 
-  room = { q, inbox, alive: true, busy: false, model: model || DEFAULT_MODEL, effort: effort || DEFAULT_EFFORT };
+  room = {
+    q, inbox, alive: true, busy: false, turns: 0,
+    model: model || DEFAULT_MODEL, effort: effort || DEFAULT_EFFORT,
+    folders: folders ? [...folders] : [],
+  };
   rooms.set(roomId, room);
 
   (async () => {
@@ -153,6 +164,7 @@ function send(roomId, text, opts) {
   const room = open(roomId, opts);
   if (room.busy) throw new Error('กำลังทำงานอยู่ รอให้จบก่อน');
   room.busy = true;
+  room.turns += 1;
   const ctx = opts.context ? `[ผู้ใช้กำลังดู: ${opts.context}]\n\n` : '';
   room.inbox.push(userMessage(ctx + text));
   return { sessionId: room.sessionId || null };
@@ -207,6 +219,8 @@ function state(roomId = 'main') {
   return {
     alive: !!room?.alive,
     busy: !!room?.busy,
+    turns: room?.turns || 0,
+    folders: room?.folders || [],
     model: room?.model || DEFAULT_MODEL,
     effort: room?.effort || DEFAULT_EFFORT,
     sessionId: room?.sessionId || null,

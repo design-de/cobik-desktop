@@ -1,10 +1,19 @@
 // Cobik Desktop — main process
-// หน้าต่างเดียว แบ่งสองฝั่ง: ซ้าย = เว็บ Cowork ของจริง · ขวา = แผง Claude
+// หน้าต่างเดียว แบ่งสองฝั่ง: ซ้าย = เว็บ cobik ของจริง · ขวา = แผง Claude
 // ทั้งสองฝั่งเป็น WebContentsView คนละตัว → เว็บแอปไม่ต้องรู้จักแผง และแผงไม่ต้องเบียดเว็บ
 const { app, BrowserWindow, WebContentsView, ipcMain, session, dialog } = require('electron');
 const path = require('node:path');
 const oauth = require('./oauth');
 const agent = require('./agent');
+const store = require('./folders');
+
+// skill 6 ตัวของ cobik ที่ติดมากับแอป (ดู scripts/sync-skills.mjs)
+// แอปไม่ได้ pack เป็น asar (ตั้งไว้ใน package.json) → ที่อยู่เดียวกันทั้งตอนพัฒนาและตอนเป็นแอปจริง
+// ต้องเป็นโฟลเดอร์ที่ "อ่านได้จากโปรเซสลูก" ด้วย เพราะ Claude Code เป็นคนอ่าน ไม่ใช่เรา
+const PLUGIN_DIR = path.join(__dirname, '..', 'skills-plugin');
+const plugins = require('node:fs').existsSync(path.join(PLUGIN_DIR, '.claude-plugin', 'plugin.json'))
+  ? [{ type: 'local', path: PLUGIN_DIR, skipMcpDiscovery: true }]   // MCP เราต่อเองแล้ว plugin ไม่ต้องต่อซ้ำ
+  : [];
 
 // ที่อยู่ของเว็บ — ลำดับ: ตัวแปรตอนรัน → ค่าที่จำไว้ (ui.json) → ค่าตั้งต้น
 //
@@ -26,7 +35,7 @@ const PANEL_MAX = 900;
 const MIN_WEB_WIDTH = 480;
 
 let win = null;
-let webView = null;   // ซ้าย: Cowork
+let webView = null;   // ซ้าย: cobik
 let panelView = null; // ขวา: แผง Claude
 
 // แผงผู้ช่วยไม่ใช่พระเอกของแอป — งานคือพระเอก
@@ -54,7 +63,7 @@ const PARTITION = 'persist:cobik';
 function layout() {
   if (!win || !webView || !panelView) return;
   const { width, height } = win.getContentBounds();
-  // หุบ = หายไปเลย ไม่เหลือแถบกินที่ — ทางกลับคือไอคอนบน Topbar ของ Cowork หรือ ⌘/
+  // หุบ = หายไปเลย ไม่เหลือแถบกินที่ — ทางกลับคือไอคอนบน Topbar ของ cobik หรือ ⌘/
   const pw = collapsed ? 0 : Math.min(panelWidth, Math.max(PANEL_MIN, width - MIN_WEB_WIDTH));
   webView.setBounds({ x: 0, y: 0, width: width - pw, height });
   panelView.setBounds({ x: width - pw, y: 0, width: pw, height });
@@ -106,13 +115,13 @@ function createWindow() {
     minHeight: 600,
     title: 'Cobik',
     // ปุ่มปิด/ย่อ/ขยายลอยบนเนื้อหา ไม่กินแถบเต็มความสูง
-    // Topbar ของ Cowork เว้นที่ให้ทางซ้ายเมื่อรู้ว่าอยู่ในเปลือก (ดู components/Topbar.jsx)
+    // Topbar ของ cobik เว้นที่ให้ทางซ้ายเมื่อรู้ว่าอยู่ในเปลือก (ดู components/Topbar.jsx)
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: '#1a1a1a',
   });
 
-  // ── ซ้าย: เว็บ Cowork ของจริง ──
+  // ── ซ้าย: เว็บ cobik ของจริง ──
   // ต่อสะพานตัวเล็กให้ด้วย เพื่อให้ Topbar รู้ว่าอยู่ในแอป (ซ่อน AiChat เดิม)
   // และให้ไอคอน ✨ สั่งหุบ/กางแผงข้างขวาได้
   webView = new WebContentsView({
@@ -153,6 +162,7 @@ function createWindow() {
   const pushUrl = () => {
     const url = webView.webContents.getURL();
     panelView.webContents.send('cobik:web-url', url);
+    syncScope(url);
   };
   webView.webContents.on('did-navigate', pushUrl);
   webView.webContents.on('did-navigate-in-page', pushUrl);
@@ -202,7 +212,7 @@ ipcMain.handle('cobik:retry-panel', async () => {
 ipcMain.handle('cobik:drag-start', () => { startDrag(); });
 ipcMain.handle('cobik:drag-end', () => { stopDrag(); savePrefs(); return panelWidth; });
 
-// ── เชื่อม Cowork (OAuth) ──
+// ── เชื่อม cobik (OAuth) ──
 ipcMain.handle('cobik:auth-status', () => oauth.status());
 
 ipcMain.handle('cobik:auth-connect', async () => {
@@ -217,26 +227,52 @@ ipcMain.handle('cobik:auth-connect', async () => {
 ipcMain.handle('cobik:auth-clear', () => { oauth.clear(); agent.reset(); return true; });
 
 // ── โฟลเดอร์ในเครื่อง + ไฟล์แนบ ──
-// เก็บไว้ในหน่วยความจำของรอบนี้ก่อน (เฟสถัดไปจะจำต่อโปรเจกต์)
-let folders = [];
+// จำแยกตามโปรเจกต์ที่เปิดอยู่ฝั่งซ้าย และจำข้ามการปิด-เปิดแอป (ดู src/folders.js)
+let scope = { key: store.GLOBAL };
+const folders = () => store.list(scope.key);
 
-ipcMain.handle('cobik:folders-list', () => folders);
+/** บอกแผงว่าตอนนี้ขอบเขตไหน มีโฟลเดอร์อะไร และชุดนี้ตรงกับบทสนทนาที่คุยอยู่ไหม */
+function pushFolders() {
+  const st = agent.state('main');
+  panelView?.webContents.send('cobik:folders', {
+    scope: scope.key,
+    folders: folders(),
+    // บทสนทนาที่เปิดค้างอยู่ใช้โฟลเดอร์ชุดเก่า → แผงขึ้นบรรทัดบอกว่าจะมีผลรอบหน้า
+    stale: st.alive && st.turns > 0 && !store.same(st.folders, folders()),
+  });
+}
+
+/**
+ * ฝั่งซ้ายเปลี่ยนโปรเจกต์ → สลับชุดโฟลเดอร์ตาม
+ * ถ้ายังไม่ได้คุยอะไรในห้องนี้เลย ปิดห้องเงียบ ๆ ให้ห้องใหม่ได้โฟลเดอร์ที่ถูก
+ * (ถ้าคุยไปแล้วไม่แตะ — ตัดบทสนทนาของคนอื่นทิ้งกลางคันเป็นเรื่องที่ยอมไม่ได้)
+ */
+function syncScope(url) {
+  const next = store.scopeOf(url);
+  if (next.key === scope.key) return;
+  scope = next;
+  const st = agent.state('main');
+  if (st.alive && !st.busy && st.turns === 0 && !store.same(st.folders, folders())) agent.reset('main');
+  pushFolders();
+}
+
+ipcMain.handle('cobik:folders-list', () => ({ scope: scope.key, folders: folders() }));
 
 ipcMain.handle('cobik:folders-add', async () => {
   const r = await dialog.showOpenDialog(win, {
     title: 'เลือกโฟลเดอร์ให้ Claude อ่านได้',
     properties: ['openDirectory', 'multiSelections', 'createDirectory'],
   });
-  if (r.canceled) return folders;
-  for (const p of r.filePaths) if (!folders.includes(p)) folders.push(p);
+  if (r.canceled) return { scope: scope.key, folders: folders() };
+  store.add(scope.key, r.filePaths);
   agent.reset(); // โฟลเดอร์เป็นค่าตอนเปิด session → ต้องเปิดห้องใหม่ให้มีผล
-  return folders;
+  return { scope: scope.key, folders: folders() };
 });
 
 ipcMain.handle('cobik:folders-remove', (_e, p) => {
-  folders = folders.filter((f) => f !== p);
+  store.remove(scope.key, p);
   agent.reset();
-  return folders;
+  return { scope: scope.key, folders: folders() };
 });
 
 ipcMain.handle('cobik:pick-files', async () => {
@@ -246,6 +282,76 @@ ipcMain.handle('cobik:pick-files', async () => {
   });
   return r.canceled ? [] : r.filePaths;
 });
+
+// ── ขออนุญาตก่อนแตะเครื่องของผู้ใช้ ──
+// เครื่องยนต์ของ Claude Code จะเรียก canUseTool เมื่อจะทำสิ่งที่ย้อนกลับยาก
+// (เขียนไฟล์ · แก้ไฟล์ · รันคำสั่ง) เราส่งต่อให้แผงถามเป็นภาษาคน แล้วรอคำตอบ
+//
+// tool ของ cobik เองไม่ถาม — ผู้ใช้กด "อนุญาตให้ Cobi" ตอนเชื่อมบัญชีไปแล้วครั้งหนึ่ง
+// และทุกการแก้ถูกบันทึกในประวัติของแอปอยู่แล้ว · การถามซ้ำทุกครั้งจะทำให้ใช้งานไม่ได้จริง
+const AUTO_ALLOW = /^mcp__cobik__/;
+
+const asks = new Map();
+let askSeq = 0;
+
+/** สรุปสิ่งที่กำลังจะทำให้อ่านได้ในบรรทัดเดียว */
+function describeAsk(tool, input = {}) {
+  const t = String(tool);
+  if (t === 'Bash') return String(input.command || '');
+  if (/^(Write|Edit|NotebookEdit|Read)$/.test(t)) return String(input.file_path || input.notebook_path || '');
+  if (t === 'WebFetch') return String(input.url || '');
+  const first = Object.values(input).find((v) => typeof v === 'string');
+  return first ? String(first).slice(0, 300) : '';
+}
+
+async function canUseTool(toolName, input, opts = {}) {
+  if (AUTO_ALLOW.test(toolName)) return { behavior: 'allow' };
+  if (!panelView || panelView.webContents.isDestroyed()) {
+    return { behavior: 'deny', message: 'ยังไม่ได้รับอนุญาตจากผู้ใช้' };
+  }
+  // คำถามที่ไม่มีใครเห็นคือคำถามที่ไม่มีวันได้คำตอบ — กางแผงขึ้นมาก่อน
+  if (collapsed) setCollapsed(false);
+
+  const id = `ask${++askSeq}`;
+  return new Promise((resolve) => {
+    const finish = (result) => {
+      if (!asks.has(id)) return;
+      asks.delete(id);
+      try { opts.signal?.removeEventListener('abort', onAbort); } catch {}
+      // บอกแผงเสมอ ไม่ว่าคำตอบมาจากผู้ใช้หรือจากการยกเลิก — การ์ดจะได้ไม่ค้างเป็นปุ่มกดไม่ได้
+      toPanel({ type: 'ask-done', id, answer: result.behavior });
+      resolve(result);
+    };
+    const onAbort = () => finish({ behavior: 'deny', message: 'ยกเลิกแล้ว' });
+    asks.set(id, { finish, suggestions: opts.suggestions || [] });
+    try { opts.signal?.addEventListener('abort', onAbort, { once: true }); } catch {}
+
+    toPanel({
+      type: 'ask',
+      id,
+      tool: toolName,
+      title: opts.title || null,
+      // ปุ่ม "อนุญาตตลอด" มีได้เฉพาะเมื่อเครื่องยนต์บอกว่ากฎที่จะเขียนไม่กว้างเกินคำขอนี้
+      canAlways: !opts.suppressAlwaysAllowRule && (opts.suggestions || []).length > 0,
+      defaultToNo: !!opts.defaultToNo,
+      detail: describeAsk(toolName, input),
+    });
+  });
+}
+
+ipcMain.handle('cobik:answer-ask', (_e, { id, answer }) => {
+  const a = asks.get(id);
+  if (!a) return false;
+  if (answer === 'allow') a.finish({ behavior: 'allow' });
+  else if (answer === 'always') a.finish({ behavior: 'allow', updatedPermissions: a.suggestions });
+  else a.finish({ behavior: 'deny', message: 'ผู้ใช้ไม่อนุญาตให้ทำสิ่งนี้' });
+  return true;
+});
+
+/** ปิดคำถามที่ค้างทั้งหมด — ใช้ตอนกดหยุด เริ่มบทสนทนาใหม่ หรือสลับบทสนทนา */
+function clearAsks() {
+  for (const a of [...asks.values()]) a.finish({ behavior: 'deny', message: 'ยกเลิกแล้ว' });
+}
 
 // ── ถาม Claude ──
 function toPanel(ev) {
@@ -263,7 +369,8 @@ ipcMain.handle('cobik:ask', async (_e, { prompt, context, model, effort }) => {
 
   try {
     const r = agent.send('main', prompt, {
-      base: TARGET, token: rec.access_token, context, model, effort, folders, onEvent: toPanel,
+      base: TARGET, token: rec.access_token, context, model, effort,
+      folders: folders(), plugins, canUseTool, onEvent: toPanel,
     });
     return { ok: true, ...r };
   } catch (e) {
@@ -277,7 +384,7 @@ ipcMain.handle('cobik:warmup', async () => {
     const rec = await oauth.connect(TARGET, { interactive: false });
     if (!rec) return { ok: false, error: 'not_connected' };
     const r = await agent.warmup('main', {
-      base: TARGET, token: rec.access_token, folders, onEvent: toPanel,
+      base: TARGET, token: rec.access_token, folders: folders(), plugins, canUseTool, onEvent: toPanel,
     });
     return { ok: true, ...r };
   } catch (e) {
@@ -288,20 +395,21 @@ ipcMain.handle('cobik:warmup', async () => {
 // ── บทสนทนาที่เก็บไว้ ──
 async function authed() {
   const rec = await oauth.connect(TARGET, { interactive: false });
-  return rec ? { base: TARGET, token: rec.access_token, folders, onEvent: toPanel } : null;
+  return rec ? { base: TARGET, token: rec.access_token, folders: folders(), plugins, canUseTool, onEvent: toPanel } : null;
 }
 
 ipcMain.handle('cobik:chats', (_e, archived) => agent.listChats({ archived }));
 ipcMain.handle('cobik:chat-action', (_e, { action, id, value }) => agent.chatAction(action, id, value));
 ipcMain.handle('cobik:chat-open', async (_e, id) => {
+  clearAsks();
   const o = await authed();
   if (!o) return { ok: false, error: 'not_connected' };
   const history = await agent.openChat('main', id, o);
   return { ok: true, history };
 });
 
-ipcMain.handle('cobik:stop', () => agent.stop('main'));
-ipcMain.handle('cobik:new-chat', () => { agent.reset('main'); return true; });
+ipcMain.handle('cobik:stop', () => { clearAsks(); return agent.stop('main'); });
+ipcMain.handle('cobik:new-chat', () => { clearAsks(); agent.reset('main'); return true; });
 ipcMain.handle('cobik:agent-state', () => agent.state('main'));
 ipcMain.handle('cobik:set-model', (_e, m) => agent.setModel('main', m));
 ipcMain.handle('cobik:models', () => agent.models('main'));
@@ -331,6 +439,7 @@ function buildMenu() {
 
 app.whenReady().then(() => {
   buildMenu();
+  store.init(app.getPath('userData'));
   // ให้ session ของ partition นี้ใช้ user-agent ปกติ (บางเว็บกันบล็อก webview)
   session.fromPartition(PARTITION);
   createWindow();
