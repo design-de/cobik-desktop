@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('cobik', {
 
   // หุบ/กางแผง + ลากขอบปรับความกว้าง
   togglePanel: (v) => ipcRenderer.invoke('cobik:toggle-panel', v),
+  isPanelOpen: () => ipcRenderer.invoke('cobik:panel-open'),
   dragStart: () => ipcRenderer.invoke('cobik:drag-start'),
   dragEnd: () => ipcRenderer.invoke('cobik:drag-end'),
   onCollapsed: (cb) => {
