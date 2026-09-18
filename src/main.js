@@ -51,7 +51,7 @@ function savePrefs() {
   try {
     require('node:fs').mkdirSync(app.getPath('userData'), { recursive: true });
     const keep = loadPrefs();
-    require('node:fs').writeFileSync(prefsFile(), JSON.stringify({ ...keep, collapsed, panelWidth }));
+    require('node:fs').writeFileSync(prefsFile(), JSON.stringify({ ...keep, collapsed, panelWidth, askMode }));
   } catch {}
 }
 
@@ -108,6 +108,7 @@ function createWindow() {
   TARGET = resolveTarget(prefs);
   collapsed = prefs.collapsed !== false;              // ไม่เคยเปิดมาก่อน = หุบไว้
   panelWidth = Number(prefs.panelWidth) || PANEL_WIDTH;
+  if (ASK_MODES.includes(prefs.askMode)) askMode = prefs.askMode;
 
   win = new BrowserWindow({
     width: 1600,
@@ -116,9 +117,11 @@ function createWindow() {
     minHeight: 600,
     title: 'Cobik',
     // ปุ่มปิด/ย่อ/ขยายลอยบนเนื้อหา ไม่กินแถบเต็มความสูง
-    // Topbar ของ cobik เว้นที่ให้ทางซ้ายเมื่อรู้ว่าอยู่ในเปลือก (ดู components/Topbar.jsx)
+    // เปลือกเว็บเว้นแถบว่างด้านบนให้ปุ่มพวกนี้เมื่อรู้ว่าอยู่ในแอป (ดู components/AppChrome.jsx + lib/shellTop.js)
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 18 },
+    // y11 ให้ปุ่มอยู่กึ่งกลางแถบว่าง 34px ของหน้าเว็บพอดี (ดู cowork-app/lib/shellTop.js)
+    // ขยับค่านี้ = ต้องขยับ SHELL_TOP_PX ให้เท่ากัน ไม่งั้นปุ่มจะลอยสูง/ต่ำกว่ากลางแถบ
+    trafficLightPosition: { x: 16, y: 11 },
     backgroundColor: '#1a1a1a',
   });
 
@@ -159,6 +162,19 @@ function createWindow() {
   layout();
   win.on('resize', layout);
 
+  /* เต็มจอ = macOS ซ่อนปุ่มปิด/ย่อ/ขยาย → หน้าเว็บไม่ต้องเว้นแถบว่างไว้ให้มันอีก
+     ต้องเป็นสัญญาณจากเปลือก เพราะฝั่งเว็บเดาเองไม่ได้ (จอมีรอยบากทำให้ขนาดหน้าต่างตอนเต็มจอ
+     ไม่เท่ากับขนาดจอ การเทียบความสูงจึงเชื่อไม่ได้) */
+  const pushFullscreen = () => {
+    const v = win.isFullScreen();
+    webView?.webContents.send('cobik:fullscreen', v);
+    panelView?.webContents.send('cobik:fullscreen', v);
+  };
+  win.on('enter-full-screen', pushFullscreen);
+  win.on('leave-full-screen', pushFullscreen);
+  webView.webContents.on('did-finish-load', pushFullscreen);
+  panelView.webContents.on('did-finish-load', pushFullscreen);
+
   // เปลือกรู้ว่าฝั่งซ้ายเปิดหน้าไหนอยู่ → ส่งให้แผงเป็น "บริบท" (เฟส 2 จะใช้จริง)
   const pushUrl = () => {
     const url = webView.webContents.getURL();
@@ -171,6 +187,8 @@ function createWindow() {
   win.on('closed', () => { win = null; webView = null; panelView = null; });
 }
 
+ipcMain.handle('cobik:is-fullscreen', () => !!win?.isFullScreen());
+
 // ── ช่องทางที่แผงเรียกกลับมาหา main ──
 ipcMain.handle('cobik:get-state', () => ({
   bridgeVersion: 1,
@@ -178,7 +196,13 @@ ipcMain.handle('cobik:get-state', () => ({
   webUrl: webView ? webView.webContents.getURL() : null,
   collapsed,
   panelWidth,
+  askMode,
 }));
+
+ipcMain.handle('cobik:set-ask-mode', (_e, v) => {
+  if (ASK_MODES.includes(v)) { askMode = v; savePrefs(); }
+  return askMode;
+});
 
 ipcMain.handle('cobik:reload-web', () => {
   if (webView) webView.webContents.reload();
@@ -292,6 +316,13 @@ ipcMain.handle('cobik:pick-files', async () => {
 // และทุกการแก้ถูกบันทึกในประวัติของแอปอยู่แล้ว · การถามซ้ำทุกครั้งจะทำให้ใช้งานไม่ได้จริง
 const AUTO_ALLOW = /^mcp__cobik__/;
 
+/* เครื่องมือที่ "อ่านอย่างเดียว" — ไม่แก้ไฟล์ ไม่รันคำสั่ง ไม่ยิงเน็ต
+   โหมด auto อนุญาตให้เองโดยไม่ถาม เพราะถามทุกครั้งที่จะอ่านไฟล์หนึ่งบรรทัด
+   ทำให้ใช้งานจริงไม่ได้ · ของที่ย้อนกลับยาก (Write/Edit/Bash/WebFetch) ยังถามเสมอ */
+const READ_ONLY = /^(Read|Glob|Grep|NotebookRead|TodoWrite|ListMcpResources|ReadMcpResource)$/;
+const ASK_MODES = ['auto', 'ask'];
+let askMode = 'auto';
+
 const asks = new Map();
 let askSeq = 0;
 
@@ -307,6 +338,7 @@ function describeAsk(tool, input = {}) {
 
 async function canUseTool(toolName, input, opts = {}) {
   if (AUTO_ALLOW.test(toolName)) return { behavior: 'allow' };
+  if (askMode === 'auto' && READ_ONLY.test(toolName)) return { behavior: 'allow' };
   if (!panelView || panelView.webContents.isDestroyed()) {
     return { behavior: 'deny', message: 'ยังไม่ได้รับอนุญาตจากผู้ใช้' };
   }

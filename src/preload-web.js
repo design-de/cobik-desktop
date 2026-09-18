@@ -9,10 +9,16 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('cobik', {
-  version: 1,
+  version: 2,
   surface: 'web',
   togglePanel: (v) => ipcRenderer.invoke('cobik:toggle-panel', v),
   isPanelOpen: () => ipcRenderer.invoke('cobik:panel-open'),
+  isFullscreen: () => ipcRenderer.invoke('cobik:is-fullscreen'),
+  onFullscreen: (cb) => {
+    const h = (_e, v) => cb(v);
+    ipcRenderer.on('cobik:fullscreen', h);
+    return () => ipcRenderer.removeListener('cobik:fullscreen', h);
+  },
   onCollapsed: (cb) => {
     const h = (_e, v) => cb(v);
     ipcRenderer.on('cobik:collapsed', h);

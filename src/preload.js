@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('cobik', {
 
   // สถานะเปลือก (ไว้ให้หน้าแผงเช็คว่าเวอร์ชันสะพานตรงกันไหม)
   getState: () => ipcRenderer.invoke('cobik:get-state'),
+  setAskMode: (v) => ipcRenderer.invoke('cobik:set-ask-mode', v),
 
   // สั่งฝั่งซ้าย
   reloadWeb: () => ipcRenderer.invoke('cobik:reload-web'),
@@ -22,6 +23,12 @@ contextBridge.exposeInMainWorld('cobik', {
   retryPanel: () => ipcRenderer.invoke('cobik:retry-panel'),
   dragStart: () => ipcRenderer.invoke('cobik:drag-start'),
   dragEnd: () => ipcRenderer.invoke('cobik:drag-end'),
+  isFullscreen: () => ipcRenderer.invoke('cobik:is-fullscreen'),
+  onFullscreen: (cb) => {
+    const h = (_e, v) => cb(v);
+    ipcRenderer.on('cobik:fullscreen', h);
+    return () => ipcRenderer.removeListener('cobik:fullscreen', h);
+  },
   onCollapsed: (cb) => {
     const h = (_e, v) => cb(v);
     ipcRenderer.on('cobik:collapsed', h);
