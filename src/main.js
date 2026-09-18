@@ -92,7 +92,7 @@ function createWindow() {
     // ปุ่มปิด/ย่อ/ขยายลอยบนเนื้อหา ไม่กินแถบเต็มความสูง
     // Topbar ของ Cowork เว้นที่ให้ทางซ้ายเมื่อรู้ว่าอยู่ในเปลือก (ดู components/Topbar.jsx)
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 14, y: 14 },
+    trafficLightPosition: { x: 16, y: 18 },
     backgroundColor: '#1a1a1a',
   });
 
