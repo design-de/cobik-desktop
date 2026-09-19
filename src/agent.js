@@ -255,6 +255,14 @@ function state(roomId = 'main') {
 // "เก็บเข้ากรุ" = ติดแท็ก 'archived' ผ่าน tagSession — ไม่ได้ย้ายหรือคัดลอกไฟล์
 const ARCHIVE_TAG = 'archived';
 
+// ชื่อที่เอาไปโชว์ — ถ้ายังไม่มีชื่อจริง SDK จะคืน "ประโยคแรก" ซึ่งมีของแนบติดมาด้วย
+// (คำนำหน้าบอกว่าผู้ใช้กำลังดูหน้าไหน · ท้ายข้อความมีบล็อกอ้างอิงคน/โปรเจกต์)
+// ตัดให้เหลือบรรทัดแรกที่ผู้ใช้พิมพ์จริง ๆ ไม่งั้นรายการกับหัวแผงอ่านไม่รู้เรื่อง
+function cleanTitle(t) {
+  const first = String(t || '').replace(/^\[ผู้ใช้กำลังดู:[^\]]*\]\s*/, '').split('\n')[0].trim();
+  return first.slice(0, 120) || 'บทสนทนาไม่มีชื่อ';
+}
+
 async function listChats({ archived = false } = {}) {
   const { listSessions } = getSdk();
   try {
@@ -263,7 +271,7 @@ async function listChats({ archived = false } = {}) {
       .filter((s) => (s.tag === ARCHIVE_TAG) === !!archived)
       .map((s) => ({
         id: s.sessionId,
-        title: s.customTitle || s.summary || s.firstPrompt || 'บทสนทนาไม่มีชื่อ',
+        title: cleanTitle(s.customTitle || s.summary || s.firstPrompt),
         at: s.lastModified,
         size: s.fileSize || 0,
         tag: s.tag || null,
