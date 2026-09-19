@@ -195,19 +195,40 @@ async function models(roomId = 'main') {
   try { return await room.q.supportedModels(); } catch { return []; }
 }
 
+/** ที่ต่ออยู่ (MCP) — ถามได้ตั้งแต่ยังไม่คุย ไม่ต้องรอ init เหมือนกัน · ต่อติดขึ้นก่อน */
+async function servers(roomId = 'main') {
+  const room = rooms.get(roomId);
+  if (!room?.alive) return [];
+  try {
+    const list = (await room.q.mcpServerStatus()) || [];
+    return list
+      .map((s) => ({ name: s.name, status: s.status }))
+      .sort((a, b) => Number(b.status === 'connected') - Number(a.status === 'connected'));
+  } catch { return []; }
+}
+
+// กันค้าง: ถ้าถามแล้วไม่มีคำตอบภายในเวลา ให้คืนค่าว่างแทนที่จะแขวนแผงไว้เฉย ๆ
+const within = (ms, p, fallback) =>
+  Promise.race([p, new Promise((r) => setTimeout(() => r(fallback), ms))]);
+
 /**
- * เปิดห้องค้างไว้เฉย ๆ เพื่อถามว่าบัญชีนี้ใช้โมเดลอะไรได้บ้าง
+ * เปิดห้องค้างไว้เฉย ๆ เพื่อถามว่าบัญชีนี้มีอะไรให้ใช้บ้าง — โมเดล · skill · ที่ต่ออยู่
  * ไม่เสียเงิน — ค่าใช้จ่ายเกิดตอนส่งข้อความ ไม่ใช่ตอนเปิด session
+ *
+ * 🔴 ห้ามรอ init: ข้อความ init ของ Claude Code มาตอน "เริ่มบทสนทนาคำแรก" ไม่ใช่ตอนเปิดห้อง
+ *    ของเดิมยืนรอ 15 วิแล้วยอมแพ้ทุกครั้งที่ผู้ใช้ยังไม่ได้พิมพ์ → แผงได้ลิสต์ว่าง
+ *    เมนูโมเดลเหลือตัวสำรองตัวเดียว · Skills เทา · ที่ต่ออยู่ว่าง
+ *    สามตัวนี้ถามตรงได้เลย — รอแค่การจับมือของ SDK เอง (ปกติ 2-3 วินาที)
  */
 async function warmup(roomId, opts) {
   open(roomId, opts);
-  const room = rooms.get(roomId);
-  // รอ init ให้ CLI พร้อมก่อนถามรายชื่อโมเดล
-  // 6 วิเดิมสั้นเกินไป: เปิดครั้งแรกต้อง spawn CLI + จับมือกับ MCP ด้วย
-  // ถ้าโทเคนหมดอายุ การจับมือจะค้างยาว → ต้องคืน error ให้แผงบอกผู้ใช้ ไม่ใช่เงียบ
-  for (let i = 0; i < 100 && !room.sessionId; i++) await new Promise((r) => setTimeout(r, 150));
-  if (!room.sessionId) return { timedOut: true, models: [], commands: [], state: state(roomId) };
-  return { models: await models(roomId), commands: await commands(roomId), state: state(roomId) };
+  const [m, c, s] = await Promise.all([
+    within(45000, models(roomId), []),
+    within(45000, commands(roomId), []),
+    within(45000, servers(roomId), []),
+  ]);
+  if (!m.length && !c.length && !s.length) return { timedOut: true, models: [], commands: [], servers: [], state: state(roomId) };
+  return { models: m, commands: c, servers: s, state: state(roomId) };
 }
 
 /** ปิดห้อง — เริ่มบทสนทนาใหม่ */
@@ -288,7 +309,7 @@ async function openChat(roomId, sessionId, opts) {
 }
 
 module.exports = {
-  send, stop, reset, setModel, models, commands, warmup, state, setWorkdir,
+  send, stop, reset, setModel, models, commands, servers, warmup, state, setWorkdir,
   listChats, chatAction, openChat,
   DEFAULT_MODEL, DEFAULT_EFFORT,
 };

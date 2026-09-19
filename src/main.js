@@ -396,9 +396,11 @@ function toPanel(ev) {
 
 async function pushCatalog() {
   try {
-    const [models, commands] = await Promise.all([agent.models('main'), agent.commands('main')]);
-    if (models.length || commands.length) {
-      panelView?.webContents.send('cobik:agent', { type: 'catalog', models, commands });
+    const [models, commands, servers] = await Promise.all([
+      agent.models('main'), agent.commands('main'), agent.servers('main'),
+    ]);
+    if (models.length || commands.length || servers.length) {
+      panelView?.webContents.send('cobik:agent', { type: 'catalog', models, commands, servers });
     }
   } catch {}
 }
