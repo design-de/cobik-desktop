@@ -11,6 +11,10 @@ contextBridge.exposeInMainWorld('cobik', {
   // สถานะเปลือก (ไว้ให้หน้าแผงเช็คว่าเวอร์ชันสะพานตรงกันไหม)
   getState: () => ipcRenderer.invoke('cobik:get-state'),
   setAskMode: (v) => ipcRenderer.invoke('cobik:set-ask-mode', v),
+  // สิทธิ์ที่ให้ Cobi ไว้ — แผงยังไม่ได้ใช้ (ดูได้ที่เมนู Cobik → สิทธิ์ที่ให้ไว้)
+  // เปิดช่องไว้ให้แผงเอาไปทำหน้าตั้งค่าของตัวเองได้โดยไม่ต้องออกแอปเวอร์ชันใหม่
+  permissions: () => ipcRenderer.invoke('cobik:permissions'),
+  resetPermissions: () => ipcRenderer.invoke('cobik:permissions-reset'),
 
   // สั่งฝั่งซ้าย
   reloadWeb: () => ipcRenderer.invoke('cobik:reload-web'),

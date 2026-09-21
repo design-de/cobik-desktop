@@ -7,6 +7,7 @@ const oauth = require('./oauth');
 const agent = require('./agent');
 const store = require('./folders');
 const updater = require('./update');
+const perms = require('./permissions');
 
 // skill 6 ตัวของ cobik ที่ติดมากับแอป (ดู scripts/sync-skills.mjs)
 // แอปไม่ได้ pack เป็น asar (ตั้งไว้ใน package.json) → ที่อยู่เดียวกันทั้งตอนพัฒนาและตอนเป็นแอปจริง
@@ -317,17 +318,15 @@ ipcMain.handle('cobik:pick-files', async () => {
 });
 
 // ── ขออนุญาตก่อนแตะเครื่องของผู้ใช้ ──
-// เครื่องยนต์ของ Claude Code จะเรียก canUseTool เมื่อจะทำสิ่งที่ย้อนกลับยาก
-// (เขียนไฟล์ · แก้ไฟล์ · รันคำสั่ง) เราส่งต่อให้แผงถามเป็นภาษาคน แล้วรอคำตอบ
+// เครื่องยนต์ของ Claude Code เรียก canUseTool เมื่อจะทำสิ่งที่ย้อนกลับยาก
+// (เขียนไฟล์ · แก้ไฟล์ · รันคำสั่ง) เราตัดสินจาก "สิทธิ์ที่ผู้ใช้ให้ไว้" ก่อน (src/permissions.js)
+// เหลือเท่าที่ยังไม่เคยให้ ค่อยส่งต่อให้แผงถามเป็นภาษาคน
 //
 // tool ของ cobik เองไม่ถาม — ผู้ใช้กด "อนุญาตให้ Cobi" ตอนเชื่อมบัญชีไปแล้วครั้งหนึ่ง
 // และทุกการแก้ถูกบันทึกในประวัติของแอปอยู่แล้ว · การถามซ้ำทุกครั้งจะทำให้ใช้งานไม่ได้จริง
 const AUTO_ALLOW = /^mcp__cobik__/;
 
-/* เครื่องมือที่ "อ่านอย่างเดียว" — ไม่แก้ไฟล์ ไม่รันคำสั่ง ไม่ยิงเน็ต
-   โหมด auto อนุญาตให้เองโดยไม่ถาม เพราะถามทุกครั้งที่จะอ่านไฟล์หนึ่งบรรทัด
-   ทำให้ใช้งานจริงไม่ได้ · ของที่ย้อนกลับยาก (Write/Edit/Bash/WebFetch) ยังถามเสมอ */
-const READ_ONLY = /^(Read|Glob|Grep|NotebookRead|TodoWrite|ListMcpResources|ReadMcpResource)$/;
+// 'auto' = ใช้สิทธิ์ที่ให้ไว้ · 'ask' = ถามทุกครั้งแม้แต่การอ่าน (ผู้ใช้สลับเองได้ในแผง)
 const ASK_MODES = ['auto', 'ask'];
 let askMode = 'auto';
 
@@ -338,15 +337,56 @@ let askSeq = 0;
 function describeAsk(tool, input = {}) {
   const t = String(tool);
   if (t === 'Bash') return String(input.command || '');
-  if (/^(Write|Edit|NotebookEdit|Read)$/.test(t)) return String(input.file_path || input.notebook_path || '');
+  if (/^(Write|Edit|MultiEdit|NotebookEdit|Read)$/.test(t)) return String(input.file_path || input.notebook_path || '');
   if (t === 'WebFetch') return String(input.url || '');
   const first = Object.values(input).find((v) => typeof v === 'string');
   return first ? String(first).slice(0, 300) : '';
 }
 
+/* ── กล่องเดียวจบ ──
+   ของเดิมถามทีละใบไปเรื่อย ๆ ตลอดชีวิตการใช้งาน — แก้ไฟล์ 10 ไฟล์ = 10 การ์ด
+   ตอนนี้ครั้งแรกที่ Cobi จะแตะเครื่องจริง ๆ จะขึ้น "ชุดสิทธิ์" ให้ตัดสินทีเดียว
+   แล้วจำไว้ถาวร (userData/permissions.json — รอดทั้งการปิดแอปและการอัปเดต)
+
+   หลาย tool ขอพร้อมกันได้ → ใช้คำสัญญาก้อนเดียวร่วมกัน ไม่งั้นกล่องซ้อนกันสามสี่ใบ */
+let consentBox = null;
+function ensureConsent() {
+  if (consentBox) return consentBox;
+  consentBox = msgBox({
+    type: 'none',
+    message: 'ให้ Cobi ทำงานในโฟลเดอร์ที่คุณเลือกได้ไหม',
+    detail: 'ตอบครั้งเดียวจบ — หลังจากนี้จะไม่ถามเรื่องเดิมซ้ำอีก'
+      + '\n\nอนุญาตแล้ว Cobi จะทำสิ่งเหล่านี้ได้เอง'
+      + '\n   •  อ่านและค้นไฟล์'
+      + '\n   •  สร้างและแก้ไฟล์ เฉพาะในโฟลเดอร์ที่คุณเพิ่มไว้เท่านั้น'
+      + '\n   •  จดรายการงานระหว่างทำ'
+      + '\n\nสิ่งเหล่านี้ยังถามทุกครั้งเหมือนเดิม'
+      + '\n   •  รันคำสั่งในเครื่อง'
+      + '\n   •  แก้ไฟล์นอกโฟลเดอร์ที่เพิ่มไว้'
+      + '\n   •  เปิดเว็บภายนอก'
+      + '\n\nเปลี่ยนใจได้ที่เมนู Cobik → สิทธิ์ที่ให้ไว้',
+    buttons: ['อนุญาต', 'ถามทีละครั้ง'],
+    defaultId: 0,
+    cancelId: 1,
+  }).then(({ response }) => perms.setConsent(response === 0 ? 'granted' : 'ask'))
+    // กล่องเปิดไม่ขึ้นด้วยเหตุใดก็ตาม ต้องไม่ทำให้คำขอค้างเป็นผี — ถือว่ายังไม่ได้ตอบ แล้วไปขึ้นการ์ดแทน
+    .catch(() => perms.consent())
+    .finally(() => { consentBox = null; });
+  return consentBox;
+}
+
 async function canUseTool(toolName, input, opts = {}) {
   if (AUTO_ALLOW.test(toolName)) return { behavior: 'allow' };
-  if (askMode === 'auto' && READ_ONLY.test(toolName)) return { behavior: 'allow' };
+
+  if (askMode === 'auto') {
+    if (perms.decide(toolName, input, folders()) === 'allow') return { behavior: 'allow' };
+    // ครั้งแรกที่มีของจริงให้ตัดสิน — ถามเป็นชุดเดียว แล้วลองตัดสินใหม่ด้วยสิทธิ์ที่เพิ่งได้
+    if (perms.consent() === 'none' && owner()) {
+      await ensureConsent();
+      if (perms.decide(toolName, input, folders()) === 'allow') return { behavior: 'allow' };
+    }
+  }
+
   if (!panelView || panelView.webContents.isDestroyed()) {
     return { behavior: 'deny', message: 'ยังไม่ได้รับอนุญาตจากผู้ใช้' };
   }
@@ -364,7 +404,7 @@ async function canUseTool(toolName, input, opts = {}) {
       resolve(result);
     };
     const onAbort = () => finish({ behavior: 'deny', message: 'ยกเลิกแล้ว' });
-    asks.set(id, { finish, suggestions: opts.suggestions || [] });
+    asks.set(id, { finish, tool: toolName, input });
     try { opts.signal?.addEventListener('abort', onAbort, { once: true }); } catch {}
 
     toPanel({
@@ -372,8 +412,9 @@ async function canUseTool(toolName, input, opts = {}) {
       id,
       tool: toolName,
       title: opts.title || null,
-      // ปุ่ม "อนุญาตตลอด" มีได้เฉพาะเมื่อเครื่องยนต์บอกว่ากฎที่จะเขียนไม่กว้างเกินคำขอนี้
-      canAlways: !opts.suppressAlwaysAllowRule && (opts.suggestions || []).length > 0,
+      // "อนุญาตตลอด" เก็บกฎไว้ในไฟล์ของเราเอง จึงเสนอได้เสมอ
+      // เว้นแต่เครื่องยนต์บอกเองว่าคำขอนี้ไม่ควรกลายเป็นกฎ (เช่นคำสั่งที่ประกอบสดจากข้อมูลภายนอก)
+      canAlways: !opts.suppressAlwaysAllowRule,
       defaultToNo: !!opts.defaultToNo,
       detail: describeAsk(toolName, input),
     });
@@ -384,10 +425,39 @@ ipcMain.handle('cobik:answer-ask', (_e, { id, answer }) => {
   const a = asks.get(id);
   if (!a) return false;
   if (answer === 'allow') a.finish({ behavior: 'allow' });
-  else if (answer === 'always') a.finish({ behavior: 'allow', updatedPermissions: a.suggestions });
-  else a.finish({ behavior: 'deny', message: 'ผู้ใช้ไม่อนุญาตให้ทำสิ่งนี้' });
+  else if (answer === 'always') {
+    perms.grant(a.tool, a.input, folders());
+    a.finish({ behavior: 'allow' });
+  } else a.finish({ behavior: 'deny', message: 'ผู้ใช้ไม่อนุญาตให้ทำสิ่งนี้' });
   return true;
 });
+
+// ── สิทธิ์ที่ให้ไว้: ดูได้ ถอนได้ ──
+ipcMain.handle('cobik:permissions', () => perms.state());
+ipcMain.handle('cobik:permissions-reset', () => { perms.clearGrants(); perms.setConsent('none'); return perms.state(); });
+
+async function showPermissions() {
+  const s = perms.state();
+  const head = s.consent === 'granted'
+    ? 'Cobi อ่าน สร้าง และแก้ไฟล์ในโฟลเดอร์ที่คุณเพิ่มไว้ได้เอง'
+    : s.consent === 'ask'
+      ? 'Cobi ถามก่อนทุกครั้งที่จะแตะไฟล์ในเครื่อง'
+      : 'ยังไม่ได้ตอบ — จะถามครั้งแรกที่ Cobi ต้องแตะเครื่อง';
+  const lines = s.grants.length
+    ? s.grants.map((g) => `   •  ${g.label}`).join('\n')
+    : '   (ยังไม่มี)';
+  const { response } = await msgBox({
+    type: 'none',
+    message: 'สิทธิ์ที่ให้ Cobi ไว้',
+    detail: `${head}\n\nที่กด "อนุญาตตลอด" ไว้\n${lines}`
+      + '\n\nกล่องขออนุญาตของ macOS (พวงกุญแจ · โฟลเดอร์ Desktop/Documents) เป็นคนละชุดกัน'
+      + '\nถอนได้ที่ System Settings → Privacy & Security',
+    buttons: ['ปิด', 'ถอนทั้งหมด'],
+    defaultId: 0,
+    cancelId: 0,
+  });
+  if (response === 1) { perms.clearGrants(); perms.setConsent('none'); }
+}
 
 /** ปิดคำถามที่ค้างทั้งหมด — ใช้ตอนกดหยุด เริ่มบทสนทนาใหม่ หรือสลับบทสนทนา */
 function clearAsks() {
@@ -506,7 +576,11 @@ async function askInstall({ auto = false } = {}) {
     type: 'none',
     message: `Cobik ${s.latest} พร้อมให้อัปเดต`,
     detail: `ตอนนี้ใช้ ${s.current} อยู่\n\nแอปจะปิดแล้วเปิดใหม่ให้เอง ใช้เวลาไม่กี่วินาที`
-      + `\nบทสนทนาที่ค้างอยู่กับ Cobi จะเริ่มใหม่${notes ? `\n\nสิ่งที่เปลี่ยน\n${notes}` : ''}`,
+      + '\nบทสนทนาที่ค้างอยู่กับ Cobi จะเริ่มใหม่'
+      // แอปยังเซ็นแบบ ad-hoc → macOS มองว่ารุ่นใหม่เป็นคนละแอป แล้วขอสิทธิ์ที่เคยให้ไว้ใหม่
+      // (สิทธิ์ที่ให้ Cobi ไว้ไม่หาย — อันนั้นเก็บในไฟล์ของเราเอง)
+      + '\nหลังเปิดใหม่ macOS อาจขอสิทธิ์พวงกุญแจหรือโฟลเดอร์อีกครั้ง กดอนุญาตได้เลย'
+      + `${notes ? `\n\nสิ่งที่เปลี่ยน\n${notes}` : ''}`,
     buttons: ['อัปเดตแล้วเปิดใหม่', 'ภายหลัง'],
     defaultId: 0,
     cancelId: 1,
@@ -559,7 +633,22 @@ function buildMenu() {
   const { Menu } = require('electron');
   const mac = process.platform === 'darwin';
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(mac ? [{ role: 'appMenu' }] : []),
+    // เมนูชื่อแอปเขียนเอง (ไม่ใช้ role:'appMenu' สำเร็จรูป) เพื่อแทรก "สิทธิ์ที่ให้ไว้"
+    // ตรงที่ macOS คาดหวังให้เรื่องระดับแอปอยู่ — ไม่ใช่ใต้เมนูช่วยเหลือ
+    ...(mac ? [{
+      label: 'Cobik',
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { label: 'สิทธิ์ที่ให้ไว้…', click: () => showPermissions() },
+        { type: 'separator' },
+        { role: 'services' },
+        { type: 'separator' },
+        { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' },
+      ],
+    }] : []),
     { role: 'editMenu' },
     {
       label: 'มุมมอง',
@@ -588,6 +677,7 @@ function buildMenu() {
 app.whenReady().then(() => {
   buildMenu();
   store.init(app.getPath('userData'));
+  perms.init(app.getPath('userData'));
   // เช็คเงียบ ๆ — ไม่มีรุ่นใหม่ก็ไม่ต้องบอกอะไร · ล้มเหลวก็ไม่ต้องบอก (เน็ตหลุดไม่ใช่เรื่องของผู้ใช้)
   setTimeout(() => updater.check(), 8000);
   setInterval(() => updater.check(), 6 * 60 * 60 * 1000);

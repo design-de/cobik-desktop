@@ -55,7 +55,12 @@
       "darkModeSupport": true,
       "identity": null,
       "extendInfo": {
-        "LSMinimumSystemVersion": "12.0"
+        "LSMinimumSystemVersion": "12.0",
+        "NSDesktopFolderUsageDescription": "Cobi อ่านและแก้ไฟล์ในโฟลเดอร์ที่คุณเพิ่มไว้ในแอป",
+        "NSDocumentsFolderUsageDescription": "Cobi อ่านและแก้ไฟล์ในโฟลเดอร์ที่คุณเพิ่มไว้ในแอป",
+        "NSDownloadsFolderUsageDescription": "Cobi อ่านและแก้ไฟล์ในโฟลเดอร์ที่คุณเพิ่มไว้ในแอป",
+        "NSRemovableVolumesUsageDescription": "Cobi อ่านและแก้ไฟล์ในโฟลเดอร์ที่คุณเพิ่มไว้ในแอป",
+        "NSNetworkVolumesUsageDescription": "Cobi อ่านและแก้ไฟล์ในโฟลเดอร์ที่คุณเพิ่มไว้ในแอป"
       },
       "artifactName": "Cobik-${version}-arm64.${ext}"
     },
