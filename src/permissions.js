@@ -137,6 +137,7 @@ function decide(tool, input = {}, folders = []) {
 /** บรรทัดภาษาคนของกฎที่ให้ไว้ — ใช้ในกล่อง "สิทธิ์ที่ให้ไว้" */
 function describe(rule) {
   if (rule.tool === 'Bash') return `รันคำสั่ง ${rule.head}`;
+  if (rule.tool === 'mcp__cobik_canvas__canvas_write') return 'สร้างและแก้ canvas ใน My Canvas';
   if (WRITE_FILE.test(rule.tool)) return `แก้ไฟล์ใน ${rule.dir}`;
   if (rule.tool === 'WebFetch') return `เปิดเว็บ ${rule.host}`;
   return `ใช้ ${rule.tool}`;

@@ -8,6 +8,7 @@ const agent = require('./agent');
 const store = require('./folders');
 const updater = require('./update');
 const perms = require('./permissions');
+const canvasTools = require('./canvas');
 
 // skill 6 ตัวของ cobik ที่ติดมากับแอป (ดู scripts/sync-skills.mjs)
 // แอปไม่ได้ pack เป็น asar (ตั้งไว้ใน package.json) → ที่อยู่เดียวกันทั้งตอนพัฒนาและตอนเป็นแอปจริง
@@ -324,7 +325,46 @@ ipcMain.handle('cobik:pick-files', async () => {
 //
 // tool ของ cobik เองไม่ถาม — ผู้ใช้กด "อนุญาตให้ Cobi" ตอนเชื่อมบัญชีไปแล้วครั้งหนึ่ง
 // และทุกการแก้ถูกบันทึกในประวัติของแอปอยู่แล้ว · การถามซ้ำทุกครั้งจะทำให้ใช้งานไม่ได้จริง
-const AUTO_ALLOW = /^mcp__cobik__/;
+// ── ท่อคุยกับหน้าเว็บเรื่อง canvas ──────────────────────────────────────
+// canvas เก็บใน localStorage ของหน้าเว็บ ไม่ได้อยู่บนเซิร์ฟเวอร์ (ดู src/canvas.js)
+// main เป็นแค่คนเดินสาร: ส่งคำสั่งไปทางซ้าย แล้วรอคำตอบกลับมาตาม rid
+const canvasWaits = new Map();
+let canvasSeq = 0;
+const CANVAS_TIMEOUT = 30000; // guide ต้องยิง RPC หลายตัว — เผื่อเวลาไว้พอ
+
+ipcMain.on('cobik:canvas-op-reply', (e, { rid, ok, data, error }) => {
+  // รับคำตอบจากหน้าต่างเว็บเท่านั้น — แผงขวาเป็นหน้าเว็บเหมือนกัน ไม่ควรตอบแทนกันได้
+  if (!webView || e.sender !== webView.webContents) return;
+  const w = canvasWaits.get(rid);
+  if (!w) return;
+  canvasWaits.delete(rid);
+  clearTimeout(w.timer);
+  if (ok) w.resolve(data);
+  else w.reject(new Error(error || 'canvas op ล้มเหลว'));
+});
+
+function askWeb(op, args) {
+  if (!webView || webView.webContents.isDestroyed()) {
+    return Promise.reject(new Error('หน้าต่างเว็บ cobik ยังไม่เปิด'));
+  }
+  const rid = `cv${++canvasSeq}`;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      canvasWaits.delete(rid);
+      reject(new Error('หน้าเว็บ cobik ไม่ตอบใน 30 วินาที — อาจยังไม่ได้ล็อกอินหรือหน้ายังโหลดไม่เสร็จ'));
+    }, CANVAS_TIMEOUT);
+    canvasWaits.set(rid, { resolve, reject, timer });
+    webView.webContents.send('cobik:canvas-op', { rid, op, args });
+  });
+}
+
+// เครื่องมือ canvas ของ Cobi — สร้างครั้งแรกที่ใช้ แล้วใช้ตัวเดิมตลอด (SDK โหลดช้า อย่าถ่วงตอนเปิดแอป)
+let canvasMcp = null;
+const localMcp = () => (canvasMcp ||= { [canvasTools.SERVER_NAME]: canvasTools.build(askWeb) });
+
+// เครื่องมือของ cobik ที่ผ่านได้เลย — ฝั่งเซิร์ฟเวอร์ทั้งชุด (RLS เป็นกำแพงจริงอยู่แล้ว)
+// บวกเครื่องมือ canvas ฝั่งอ่าน · canvas_write ไม่อยู่ในนี้ตั้งใจ — ของที่ไปโผล่บนจอผู้ใช้ต้องถามก่อน
+const AUTO_ALLOW = /^(mcp__cobik__|mcp__cobik_canvas__canvas_(guide|list|read)$)/;
 
 // 'auto' = ใช้สิทธิ์ที่ให้ไว้ · 'ask' = ถามทุกครั้งแม้แต่การอ่าน (ผู้ใช้สลับเองได้ในแผง)
 const ASK_MODES = ['auto', 'ask'];
@@ -339,6 +379,10 @@ function describeAsk(tool, input = {}) {
   if (t === 'Bash') return String(input.command || '');
   if (/^(Write|Edit|MultiEdit|NotebookEdit|Read)$/.test(t)) return String(input.file_path || input.notebook_path || '');
   if (t === 'WebFetch') return String(input.url || '');
+  if (t === 'mcp__cobik_canvas__canvas_write') {
+    const n = input.name ? `“${input.name}”` : 'canvas';
+    return `${input.id ? 'เขียนทับ' : 'สร้าง'} ${n} ใน My Canvas · ${String(input.html || '').length} ตัวอักษร`;
+  }
   const first = Object.values(input).find((v) => typeof v === 'string');
   return first ? String(first).slice(0, 300) : '';
 }
@@ -495,7 +539,7 @@ ipcMain.handle('cobik:ask', async (_e, { prompt, context, model, effort }) => {
   try {
     const r = agent.send('main', prompt, {
       base: TARGET, token: rec.access_token, context, model, effort,
-      folders: folders(), plugins, canUseTool, onEvent: toPanel,
+      folders: folders(), plugins, canUseTool, onEvent: toPanel, localMcp: localMcp(),
     });
     return { ok: true, ...r };
   } catch (e) {
@@ -509,7 +553,7 @@ ipcMain.handle('cobik:warmup', async () => {
     const rec = await oauth.connect(TARGET, { interactive: false });
     if (!rec) return { ok: false, error: 'not_connected' };
     const r = await agent.warmup('main', {
-      base: TARGET, token: rec.access_token, folders: folders(), plugins, canUseTool, onEvent: toPanel,
+      base: TARGET, token: rec.access_token, folders: folders(), plugins, canUseTool, onEvent: toPanel, localMcp: localMcp(),
     });
     if (r.timedOut) return { ok: false, error: 'เชื่อมต่อนานผิดปกติ — ลองกดเชื่อมใหม่อีกครั้ง' };
     return { ok: true, ...r };
@@ -521,7 +565,7 @@ ipcMain.handle('cobik:warmup', async () => {
 // ── บทสนทนาที่เก็บไว้ ──
 async function authed() {
   const rec = await oauth.connect(TARGET, { interactive: false });
-  return rec ? { base: TARGET, token: rec.access_token, folders: folders(), plugins, canUseTool, onEvent: toPanel } : null;
+  return rec ? { base: TARGET, token: rec.access_token, folders: folders(), plugins, canUseTool, onEvent: toPanel, localMcp: localMcp() } : null;
 }
 
 ipcMain.handle('cobik:chats', (_e, archived) => agent.listChats({ archived }));

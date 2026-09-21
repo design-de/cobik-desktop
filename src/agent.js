@@ -29,10 +29,12 @@ const getSdk = () => (sdk ||= require('@anthropic-ai/claude-agent-sdk'));
 // ห้องสนทนา: ตอนนี้ห้องเดียว ('main') — ภายหลังจะเป็นห้องต่อโปรเจกต์
 const rooms = new Map();
 
-function mcpConfig(base, token) {
+function mcpConfig(base, token, extra) {
   return {
     // ชื่อ 'cobik' ไม่ใช่ 'cowork' — กันชนกับ connector "claude.ai Cowork" ที่ผู้ใช้อาจเชื่อมไว้เอง
     cobik: { type: 'http', url: `${base}/api/mcp`, headers: { Authorization: `Bearer ${token}` } },
+    // เครื่องมือที่รันในตัวแอปเอง (เช่น My Canvas ที่เก็บอยู่ในเบราว์เซอร์ ไม่ใช่ที่เซิร์ฟเวอร์)
+    ...(extra || {}),
   };
 }
 
@@ -62,7 +64,7 @@ function userMessage(text) {
 }
 
 /** เปิดห้อง (ถ้ายังไม่มี) แล้วเริ่มวนอ่านเหตุการณ์จาก SDK ส่งออกทาง onEvent */
-function open(roomId, { base, token, model, effort, folders, plugins, canUseTool, onEvent, resumeId }) {
+function open(roomId, { base, token, model, effort, folders, plugins, canUseTool, onEvent, resumeId, localMcp }) {
   let room = rooms.get(roomId);
   if (room?.alive) return room;
 
@@ -75,7 +77,7 @@ function open(roomId, { base, token, model, effort, folders, plugins, canUseTool
       model: model || DEFAULT_MODEL,
       effort: effort || DEFAULT_EFFORT,
       cwd: WORKDIR,
-      mcpServers: mcpConfig(base, token),
+      mcpServers: mcpConfig(base, token, localMcp),
       // 'default' = เครื่องยนต์ถามก่อนทำสิ่งที่ย้อนกลับยาก (เขียนไฟล์ · รันคำสั่ง)
       // แล้วโยนคำถามมาที่ canUseTool → เราส่งต่อให้แผงถามผู้ใช้เป็นภาษาคน
       // (ของเดิมคือ bypassPermissions = ไม่ถามอะไรเลย ปลอดภัยเพราะยังไม่เปิด Write/Bash)
