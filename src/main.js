@@ -47,6 +47,14 @@ function loadPrefs() {
   try { return JSON.parse(require('node:fs').readFileSync(prefsFile(), 'utf8')); }
   catch { return { collapsed: true, panelWidth: PANEL_WIDTH }; }
 }
+// เขียนทับเฉพาะคีย์ที่ส่งมา — ค่าอื่นในไฟล์ (เช่น appUrl, updateSeen) ต้องไม่หาย
+function patchPrefs(patch) {
+  try {
+    require('node:fs').mkdirSync(app.getPath('userData'), { recursive: true });
+    require('node:fs').writeFileSync(prefsFile(), JSON.stringify({ ...loadPrefs(), ...patch }));
+  } catch {}
+}
+
 function savePrefs() {
   try {
     require('node:fs').mkdirSync(app.getPath('userData'), { recursive: true });
@@ -464,9 +472,82 @@ ipcMain.handle('cobik:models', () => agent.models('main'));
 ipcMain.handle('cobik:commands', () => agent.commands('main'));
 
 // ── อัปเดตแอป ──
-// แผงเป็นคนแสดงผล เปลือกเป็นคนทำงาน — ทุกครั้งที่สถานะขยับ ส่งไปให้แผงทั้งก้อน
-updater.setNotifier((st) => {
-  panelView?.webContents.send('cobik:update', { ...updater.snapshot(), ...st });
+// เรื่องอัปเดตเป็นเรื่องของ "ตัวแอป" ไม่ใช่เรื่องของงานและไม่ใช่เรื่องของบทสนทนา
+// เปลือกจึงพูดเอง 3 ที่: ป้ายถาวรในเมนูช่วยเหลือ · จุดบน Dock · กล่องข้อความตอนเจอรุ่นใหม่ครั้งแรก
+// (เคยเป็นแถบคาดหัวแผง Cobi — ผิดที่ แถมแผงเริ่มแบบหุบ คนที่ไม่เคยกางแผงจึงไม่มีวันเห็น)
+
+let menuLabel = '';        // ป้ายอัปเดตล่าสุดในเมนู — กันไม่ให้สร้างเมนูใหม่ทุกเปอร์เซ็นต์
+let lastUpdError = null;   // กันกล่อง error ซ้ำจากสถานะเดิม
+
+const owner = () => (win && !win.isDestroyed() ? win : null);
+const msgBox = (opt) => (owner() ? dialog.showMessageBox(owner(), opt) : dialog.showMessageBox(opt));
+
+/** ป้ายในเมนู — เปลี่ยนตามสถานะ แต่ "มีอยู่เสมอ" ไม่ว่าจะมีรุ่นใหม่หรือไม่ */
+function updateMenuItem() {
+  const s = updater.snapshot();
+  if (s.busy) return { label: `กำลังอัปเดต ${Math.round((s.percent || 0) / 5) * 5}%`, enabled: false };
+  if (s.available) return { label: `อัปเดตเป็น ${s.latest}…`, click: () => askInstall() };
+  return { label: 'ตรวจหาเวอร์ชันใหม่…', click: () => checkNow() };
+}
+
+/** จุดบน Dock — ที่เดียวที่เห็นได้โดยไม่ต้องเปิดเมนู และไม่ไปยืนขวางงาน */
+function setDockBadge(s) {
+  if (process.platform !== 'darwin' || !app.dock) return;
+  try { app.dock.setBadge(s.available && !s.busy ? '●' : ''); } catch {}
+}
+
+/** กล่องถาม — ขึ้นครั้งเดียวต่อหนึ่งเวอร์ชัน กด "ภายหลัง" แล้วไม่ตามตื๊อทุก 6 ชั่วโมง */
+async function askInstall({ auto = false } = {}) {
+  const s = updater.snapshot();
+  if (!s.available || s.busy) return;
+  if (auto) patchPrefs({ updateSeen: s.latest });   // ถือว่าบอกแล้ว ไม่ว่าผู้ใช้จะกดอะไร
+  const notes = String(s.notes || '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 6).join('\n');
+  const { response } = await msgBox({
+    type: 'none',
+    message: `Cobik ${s.latest} พร้อมให้อัปเดต`,
+    detail: `ตอนนี้ใช้ ${s.current} อยู่\n\nแอปจะปิดแล้วเปิดใหม่ให้เอง ใช้เวลาไม่กี่วินาที`
+      + `\nบทสนทนาที่ค้างอยู่กับ Cobi จะเริ่มใหม่${notes ? `\n\nสิ่งที่เปลี่ยน\n${notes}` : ''}`,
+    buttons: ['อัปเดตแล้วเปิดใหม่', 'ภายหลัง'],
+    defaultId: 0,
+    cancelId: 1,
+  });
+  if (response === 0) updater.install();
+}
+
+/** ผู้ใช้กดตรวจเอง — ต้องมีคำตอบเสมอ แม้คำตอบคือ "ไม่มีอะไรใหม่" */
+async function checkNow() {
+  await updater.check({ quiet: false });
+  const s = updater.snapshot();
+  if (s.available) return askInstall({ auto: true });
+  if (s.error) return;                     // ตัวแจ้งสถานะขึ้นกล่อง error ให้แล้ว
+  return msgBox({
+    type: 'none',
+    message: s.packaged ? 'ใช้เวอร์ชันล่าสุดอยู่แล้ว' : 'ตอนพัฒนายังอัปเดตในแอปไม่ได้',
+    detail: `Cobik ${s.current}`,
+    buttons: ['ตกลง'],
+  });
+}
+
+function updateFailed(msg) {
+  msgBox({
+    type: 'warning',
+    message: 'อัปเดตไม่สำเร็จ',
+    detail: `${msg}\n\nโหลดตัวเต็มจากหน้าดาวน์โหลดแทนได้`,
+    buttons: ['เปิดหน้าดาวน์โหลด', 'ปิด'],
+    defaultId: 1,
+    cancelId: 1,
+  }).then(({ response }) => { if (response === 0) updater.openReleases(); });
+}
+
+updater.setNotifier(() => {
+  const s = updater.snapshot();
+  const item = updateMenuItem();
+  if (item.label !== menuLabel) { menuLabel = item.label; buildMenu(); }
+  setDockBadge(s);
+  if (s.error && s.error !== lastUpdError) { lastUpdError = s.error; updateFailed(s.error); }
+  if (!s.error) lastUpdError = null;
+  // เจอรุ่นใหม่ที่ยังไม่เคยบอก → ถามหนึ่งครั้ง แล้วปล่อยให้เมนูกับจุดบน Dock ทำหน้าที่ต่อ
+  if (s.available && !s.busy && loadPrefs().updateSeen !== s.latest) askInstall({ auto: true });
 });
 
 ipcMain.handle('cobik:update-state', () => updater.snapshot());
@@ -495,7 +576,8 @@ function buildMenu() {
     {
       label: 'ช่วยเหลือ',
       submenu: [
-        { label: 'ตรวจหาเวอร์ชันใหม่…', click: async () => { await updater.check({ quiet: false }); setCollapsed(false); } },
+        { label: `Cobik ${app.getVersion()}`, enabled: false },
+        updateMenuItem(),
         { label: 'เปิดหน้าดาวน์โหลด', click: () => updater.openReleases() },
       ],
     },
