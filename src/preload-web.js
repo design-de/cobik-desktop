@@ -28,7 +28,9 @@ ipcRenderer.on('cobik:canvas-op', async (_e, req) => {
 });
 
 contextBridge.exposeInMainWorld('cobik', {
-  version: 3,
+  version: 4,
+  // เวอร์ชันของตัวแอป (อ่านอย่างเดียว) — เรื่องอัปเดตยังเป็นของแถบเมนู macOS เหมือนเดิม
+  appVersion: () => ipcRenderer.invoke('cobik:app-version'),
   surface: 'web',
   canvas: {
     onOp: (cb) => {

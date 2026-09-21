@@ -239,6 +239,10 @@ function createWindow() {
   win.on('closed', () => { win = null; webView = null; panelView = null; });
 }
 
+// เวอร์ชันของแอป — ฝั่งเว็บเอาไปโชว์คู่กับเวอร์ชันเว็บในเมนูผู้ใช้
+// (เดิมบอกแค่ในแถบเมนู macOS ซึ่งไม่มีใครเปิดหา — user ทัก)
+ipcMain.handle('cobik:app-version', () => app.getVersion());
+
 ipcMain.handle('cobik:is-fullscreen', () => !!win?.isFullScreen());
 
 // ── ช่องทางที่แผงเรียกกลับมาหา main ──
