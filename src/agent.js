@@ -63,6 +63,24 @@ function userMessage(text) {
   };
 }
 
+/* setMcpServers() คืนค่าทันทีที่เครื่องยนต์รับเรื่อง แต่ยัง "ต่อไม่ติด" อีกไม่กี่วินาที
+   ถ้าป้อนคำถามช่วงนั้นพอดี เทิร์นแรกจะมองไม่เห็นเครื่องมือ แล้ว Cobi จะตอบว่า server ไม่ตอบ
+   (อาการที่เจอจริง) — รอจนขึ้น connected ก่อน
+   เพดาน 45 วิ เท่ากับที่ warmup รออย่างอื่น: ในแอปจริงใช้ราว 10 วิ (ช้ากว่า node เปล่าเพราะโหลด skill)
+   15 วิเคยตั้งไว้แล้วเตือนหลอกทุกครั้งที่เปิดแอป */
+async function waitConnected(q, names, ms = 45000) {
+  const until = Date.now() + ms;
+  while (Date.now() < until) {
+    try {
+      const list = (await q.mcpServerStatus()) || [];
+      if (names.every((n) => list.some((s) => s.name === n && s.status === 'connected'))) return true;
+    } catch { /* ยังไม่พร้อมตอบ — ลองใหม่ */ }
+    await new Promise((r) => setTimeout(r, 500));
+  }
+  console.warn('เครื่องมือในตัวแอปยังไม่ต่อติดใน 45 วินาที:', names.join(', '));
+  return false;
+}
+
 /** เปิดห้อง (ถ้ายังไม่มี) แล้วเริ่มวนอ่านเหตุการณ์จาก SDK ส่งออกทาง onEvent */
 function open(roomId, { base, token, model, effort, folders, plugins, canUseTool, onEvent, resumeId, localMcp }) {
   let room = rooms.get(roomId);
@@ -94,8 +112,19 @@ function open(roomId, { base, token, model, effort, folders, plugins, canUseTool
     },
   });
 
+  /* 🔴 เครื่องมือที่รันในตัวแอป (type 'sdk' เช่น cobik_canvas) ต้อง "ลงทะเบียนซ้ำ" หลังเปิด query
+     ส่งไปกับ options.mcpServers ตอนเปิดอย่างเดียว = เงียบหาย ไม่มีใน mcpServerStatus() เลย
+     (พิสูจน์แล้วกับ SDK 0.3.274 — ของ type http ติดปกติ แต่ type sdk ไม่ติด)
+     setMcpServers() รับทั้งชุด จึงต้องส่ง cobik (http) ไปด้วย ไม่งั้นของเดิมหลุด */
+  const localNames = Object.keys(localMcp || {});
+  const mcpReady = localNames.length
+    ? q.setMcpServers(mcpConfig(base, token, localMcp))
+        .then(() => waitConnected(q, localNames))
+        .catch((e) => console.warn('ลงทะเบียนเครื่องมือในตัวแอปไม่สำเร็จ:', e?.message || e))
+    : Promise.resolve();
+
   room = {
-    q, inbox, alive: true, busy: false, turns: 0,
+    q, inbox, alive: true, busy: false, turns: 0, mcpReady,
     model: model || DEFAULT_MODEL, effort: effort || DEFAULT_EFFORT,
     folders: folders ? [...folders] : [],
   };
@@ -168,7 +197,9 @@ function send(roomId, text, opts) {
   room.busy = true;
   room.turns += 1;
   const ctx = opts.context ? `[ผู้ใช้กำลังดู: ${opts.context}]\n\n` : '';
-  room.inbox.push(userMessage(ctx + text));
+  // รอให้เครื่องมือในตัวแอปลงทะเบียนเสร็จก่อนค่อยป้อนคำถาม — ไม่งั้นเทิร์นแรกมองไม่เห็นมัน
+  // (ครั้งถัดไป promise resolve แล้ว แทบไม่หน่วงอะไรเลย)
+  (room.mcpReady || Promise.resolve()).then(() => room.inbox.push(userMessage(ctx + text)));
   return { sessionId: room.sessionId || null };
 }
 
@@ -223,7 +254,8 @@ const within = (ms, p, fallback) =>
  *    สามตัวนี้ถามตรงได้เลย — รอแค่การจับมือของ SDK เอง (ปกติ 2-3 วินาที)
  */
 async function warmup(roomId, opts) {
-  open(roomId, opts);
+  const room = open(roomId, opts);
+  await (room.mcpReady || Promise.resolve());
   const [m, c, s] = await Promise.all([
     within(45000, models(roomId), []),
     within(45000, commands(roomId), []),
