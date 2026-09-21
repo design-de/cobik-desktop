@@ -84,8 +84,8 @@ function setCollapsed(v) {
   collapsed = typeof v === 'boolean' ? v : !collapsed;
   layout();
   // บอกทั้งสองฝั่ง — แผงใช้ตัดสินว่าจะจุด Claude ไหม · เว็บใช้ทำสถานะปุ่ม ✨
-  panelView?.webContents.send('cobik:collapsed', collapsed);
-  webView?.webContents.send('cobik:collapsed', collapsed);
+  send(panelView, 'cobik:collapsed', collapsed);
+  send(webView, 'cobik:collapsed', collapsed);
   savePrefs();
   return collapsed;
 }
@@ -109,8 +109,46 @@ function startDrag() {
 }
 function stopDrag() { clearInterval(dragTimer); dragTimer = null; }
 
+/** ส่งข้อความหา view แบบไม่สนใจว่ามันตายไปแล้วหรือยัง (ตายแล้วเงียบ ไม่โยน error) */
+function send(view, channel, payload) {
+  try {
+    if (view && !view.webContents.isDestroyed()) view.webContents.send(channel, payload);
+  } catch { /* เฟรมถูกทิ้งระหว่างทาง — ไม่มีอะไรให้ทำต่อ */ }
+}
+
 function loadPanel() {
   panelView?.webContents.loadURL(`${TARGET}/desktop/panel`);
+}
+
+/* ── ฟื้นจอที่ "พัง" ไม่ใช่แค่ "โหลดไม่สำเร็จ" ────────────────────────────
+   เกิดจริงแล้ว 2026-09-21: canvas ที่ AI เขียนกินหน่วยความจำจน V8 OOM
+   → renderer ตาย → เฟรมถูกทิ้ง → แผง Cobi เหลือพื้นดำถาวร กดปุ่มอะไรก็ไม่กลับมา
+   (ทั้งสองจอเป็น origin เดียวกัน Chromium จึงใช้ renderer ตัวเดียว ตายพร้อมกัน)
+   did-fail-load ไม่ยิงในกรณีนี้ เพราะโหลดสำเร็จไปแล้ว มันมาตายทีหลัง
+   กันวนไม่รู้จบ: ฟื้นได้ 3 ครั้งต่อนาที เกินกว่านั้นแปลว่าฟื้นไปก็ตายอีก ยอมหยุดแล้วบอกผู้ใช้ */
+const REVIVE_MAX = 3;
+const REVIVE_WINDOW = 60000;
+function reviveOnCrash(getView, label, reload) {
+  const hits = [];
+  const view = getView();
+  if (!view) return;
+  view.webContents.on('render-process-gone', (_e, details) => {
+    if (details?.reason === 'clean-exit') return;
+    const now = Date.now();
+    while (hits.length && now - hits[0] > REVIVE_WINDOW) hits.shift();
+    hits.push(now);
+    console.warn(`${label} ดับ (${details?.reason}) — ฟื้นครั้งที่ ${hits.length}`);
+    if (hits.length > REVIVE_MAX) {
+      dialog.showMessageBox(win, {
+        type: 'warning',
+        message: `${label} ดับซ้ำ ๆ`,
+        detail: 'ฟื้นให้แล้วหลายครั้งแต่ยังดับอีก — มักเกิดจาก canvas ที่กินหน่วยความจำไม่หยุด\nลองปิดแอปแล้วเปิดใหม่ แล้วลบ canvas ตัวที่เพิ่งเปิดอยู่',
+        buttons: ['เข้าใจแล้ว'],
+      }).catch(() => {});
+      return;
+    }
+    try { reload(); } catch {}
+  });
 }
 
 function createWindow() {
@@ -169,6 +207,10 @@ function createWindow() {
     }
   });
 
+  // จอพัง (renderer ตาย) ให้ฟื้นเอง — คนละเรื่องกับ did-fail-load ข้างบน
+  reviveOnCrash(() => webView, 'หน้าต่างเว็บ', () => webView.webContents.reload());
+  reviveOnCrash(() => panelView, 'แผง Cobi', () => loadPanel());
+
   layout();
   win.on('resize', layout);
 
@@ -177,8 +219,8 @@ function createWindow() {
      ไม่เท่ากับขนาดจอ การเทียบความสูงจึงเชื่อไม่ได้) */
   const pushFullscreen = () => {
     const v = win.isFullScreen();
-    webView?.webContents.send('cobik:fullscreen', v);
-    panelView?.webContents.send('cobik:fullscreen', v);
+    send(webView, 'cobik:fullscreen', v);
+    send(panelView, 'cobik:fullscreen', v);
   };
   win.on('enter-full-screen', pushFullscreen);
   win.on('leave-full-screen', pushFullscreen);
@@ -188,7 +230,7 @@ function createWindow() {
   // เปลือกรู้ว่าฝั่งซ้ายเปิดหน้าไหนอยู่ → ส่งให้แผงเป็น "บริบท" (เฟส 2 จะใช้จริง)
   const pushUrl = () => {
     const url = webView.webContents.getURL();
-    panelView.webContents.send('cobik:web-url', url);
+    send(panelView, 'cobik:web-url', url);
     syncScope(url);
   };
   webView.webContents.on('did-navigate', pushUrl);
@@ -234,7 +276,12 @@ ipcMain.handle('cobik:set-panel-width', (_e, w) => {
   return panelWidth;
 });
 
-ipcMain.handle('cobik:toggle-panel', (_e, v) => setCollapsed(v));
+ipcMain.handle('cobik:toggle-panel', (_e, v) => {
+  const next = setCollapsed(v);
+  // กางแผงแล้วแต่แผงตายอยู่ (เคยหมดหน่วยความจำ) → โหลดใหม่ให้เลย ไม่ใช่กางพื้นดำ
+  if (!next && panelView && panelView.webContents.isCrashed?.()) loadPanel();
+  return next;
+});
 ipcMain.handle('cobik:panel-open', () => !collapsed);
 
 // ปุ่ม "ลองใหม่" บนหน้าสำรอง — โหลดแผงจากเว็บอีกครั้ง
