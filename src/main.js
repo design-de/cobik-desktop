@@ -42,7 +42,7 @@ let webView = null;   // ซ้าย: cobik
 let panelView = null; // ขวา: แผง Claude
 
 // แผงผู้ช่วยไม่ใช่พระเอกของแอป — งานคือพระเอก
-// จึง "เริ่มแบบหุบเสมอในครั้งแรก" แล้วค่อยขึ้นมาเมื่อผู้ใช้กดเอง (ไอคอน ✨ บน Topbar / ⌘/)
+// จึง "เริ่มแบบหุบเสมอในครั้งแรก" แล้วค่อยขึ้นมาเมื่อผู้ใช้กดเอง (ไอคอน ✨ บน Topbar / ⇧⌘\)
 // หลังจากนั้นจำสถานะล่าสุดไว้ — เปิดค้างไว้ก็ยังเปิดอยู่ครั้งหน้า
 const prefsFile = () => require('node:path').join(app.getPath('userData'), 'ui.json');
 function loadPrefs() {
@@ -74,7 +74,7 @@ const PARTITION = 'persist:cobik';
 function layout() {
   if (!win || !webView || !panelView) return;
   const { width, height } = win.getContentBounds();
-  // หุบ = หายไปเลย ไม่เหลือแถบกินที่ — ทางกลับคือไอคอนบน Topbar ของ cobik หรือ ⌘/
+  // หุบ = หายไปเลย ไม่เหลือแถบกินที่ — ทางกลับคือไอคอนบน Topbar ของ cobik หรือ ⇧⌘\
   const pw = collapsed ? 0 : Math.min(panelWidth, Math.max(PANEL_MIN, width - MIN_WEB_WIDTH));
   webView.setBounds({ x: 0, y: 0, width: width - pw, height });
   panelView.setBounds({ x: width - pw, y: 0, width: pw, height });
@@ -264,14 +264,34 @@ ipcMain.handle('cobik:reload-web', () => {
   if (webView) webView.webContents.reload();
 });
 
-ipcMain.handle('cobik:navigate', (_e, pathname) => {
+function navigateWeb(pathname) {
   if (!webView || typeof pathname !== 'string') return false;
   const next = new URL(pathname, TARGET);
   // กันหลุดออกนอกโดเมนของเราเอง
   if (next.origin !== new URL(TARGET).origin) return false;
   webView.webContents.loadURL(next.toString());
   return true;
-});
+}
+ipcMain.handle('cobik:navigate', (_e, pathname) => navigateWeb(pathname));
+
+/* ── คีย์ลัดของเปลือก (docs/plans/hotkeys.md ฝั่ง cowork-app) ──
+   คีย์ที่ต้องคุมสอง view พร้อมกันอยู่ที่เมนู Electron — เมนูกินคีย์ก่อนหน้าเว็บเสมอ
+   จึงใส่เฉพาะของที่เว็บทำเองไม่ได้ (แผง Cobi · ย้อนกลับ · Settings) ห้ามใส่ ⌘K/⌘\ ที่เป็นของเว็บ */
+// ⌘I = เคอร์เซอร์ไปช่องพิมพ์ Cobi (แผงซ่อนอยู่ก็เปิดให้) — แผงโฟกัส textarea เองเมื่อได้รับ cobik:focus-input
+function focusPanelInput() {
+  if (!panelView) return;
+  if (collapsed) setCollapsed(false);
+  panelView.webContents.focus();
+  send(panelView, 'cobik:focus-input');
+}
+// Esc ในช่อง Cobi = เคอร์เซอร์กลับหน้าเว็บ (แผงยังเปิดอยู่)
+ipcMain.handle('cobik:focus-web', () => { if (webView) webView.webContents.focus(); return true; });
+function goHistory(dir) {
+  const h = webView?.webContents.navigationHistory;
+  if (!h) return;
+  if (dir < 0 && h.canGoBack()) h.goBack();
+  if (dir > 0 && h.canGoForward()) h.goForward();
+}
 
 ipcMain.handle('cobik:set-panel-width', (_e, w) => {
   panelWidth = Math.max(PANEL_MIN, Math.min(PANEL_MAX, Number(w) || PANEL_WIDTH));
@@ -736,6 +756,7 @@ function buildMenu() {
         { role: 'about' },
         { type: 'separator' },
         { label: 'สิทธิ์ที่ให้ไว้…', click: () => showPermissions() },
+        { label: 'ตั้งค่า…', accelerator: 'CmdOrCtrl+,', click: () => navigateWeb('/settings') },
         { type: 'separator' },
         { role: 'services' },
         { type: 'separator' },
@@ -748,13 +769,24 @@ function buildMenu() {
     {
       label: 'มุมมอง',
       submenu: [
-        { label: 'ซ่อน/แสดงแผง Claude', accelerator: 'CmdOrCtrl+/', click: () => setCollapsed() },
+        // ⇧⌘\ คู่กับ ⌘\ ของเว็บ (พับแถบเมนูซ้าย) — ปุ่มเดียวคุมแผงข้างสองฝั่ง ⇧ = อีกฝั่ง
+        // (เดิม ⌘/ ชนกับเมนูคำสั่งใน editor บันทึกการประชุม — เมนูนี้กินคีย์ก่อน เว็บไม่เคยได้)
+        { label: 'ซ่อน/แสดงแผง Cobi', accelerator: 'CmdOrCtrl+Shift+\\', click: () => setCollapsed() },
+        { label: 'พิมพ์ถาม Cobi', accelerator: 'CmdOrCtrl+I', click: () => focusPanelInput() },
         { type: 'separator' },
         { label: 'แผงแคบ',  accelerator: 'CmdOrCtrl+1', click: () => { panelWidth = 340; collapsed = false; layout(); savePrefs(); } },
         { label: 'แผงกลาง', accelerator: 'CmdOrCtrl+2', click: () => { panelWidth = 460; collapsed = false; layout(); savePrefs(); } },
         { label: 'แผงกว้าง', accelerator: 'CmdOrCtrl+3', click: () => { panelWidth = 640; collapsed = false; layout(); savePrefs(); } },
         { type: 'separator' },
         { role: 'reload' }, { role: 'toggleDevTools' }, { role: 'togglefullscreen' },
+      ],
+    },
+    {
+      label: 'ไป',
+      submenu: [
+        // เปลือกไม่มีปุ่มย้อนกลับ — ก่อนหน้านี้ทางเดียวคือคลิกเมนูซ้ายใหม่
+        { label: 'ย้อนกลับ',   accelerator: 'CmdOrCtrl+[', click: () => goHistory(-1) },
+        { label: 'ไปข้างหน้า', accelerator: 'CmdOrCtrl+]', click: () => goHistory(1) },
       ],
     },
     {

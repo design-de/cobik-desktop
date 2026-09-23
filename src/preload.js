@@ -5,8 +5,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('cobik', {
   // v2 = โฟลเดอร์แยกตามโปรเจกต์ (folders.list คืนเป็น object) + คำถามขออนุญาต
   // v3 = อัปเดตแอปจากในแอป
+  // v4 = คีย์ลัด: ⌘I โฟกัสช่องพิมพ์ (onFocusInput) · Esc กลับหน้าเว็บ (focusWeb)
   // แผงอยู่บนเว็บ จึงเจอเปลือกรุ่นเก่าได้ → แผงต้องเช็คก่อนเรียกของใหม่เสมอ
-  version: 3,
+  version: 4,
 
   // สถานะเปลือก (ไว้ให้หน้าแผงเช็คว่าเวอร์ชันสะพานตรงกันไหม)
   getState: () => ipcRenderer.invoke('cobik:get-state'),
@@ -38,6 +39,15 @@ contextBridge.exposeInMainWorld('cobik', {
     ipcRenderer.on('cobik:collapsed', h);
     return () => ipcRenderer.removeListener('cobik:collapsed', h);
   },
+
+  // ── คีย์ลัด (v4) ──
+  // ⌘I จากเมนู Electron → main บอกแผงให้โฟกัสช่องพิมพ์ · Esc ในช่อง → ขอเคอร์เซอร์กลับหน้าเว็บ
+  onFocusInput: (cb) => {
+    const h = () => cb();
+    ipcRenderer.on('cobik:focus-input', h);
+    return () => ipcRenderer.removeListener('cobik:focus-input', h);
+  },
+  focusWeb: () => ipcRenderer.invoke('cobik:focus-web'),
 
   // ฝั่งซ้ายเปลี่ยนหน้า → แผงรู้ (เฟส 2)
   onWebUrl: (cb) => {
