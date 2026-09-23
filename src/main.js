@@ -681,6 +681,21 @@ function setDockBadge(s) {
   try { app.dock.setBadge(s.available && !s.busy ? '●' : ''); } catch {}
 }
 
+/* แถบความคืบหน้าบนไอคอน Dock ระหว่างโหลดรุ่นใหม่
+   🔴 ตัวแอป ~200MB บนเน็ตออฟฟิศใช้เวลาเป็นนาที — ของเดิมกดปุ่มแล้วกล่องหายไปเฉย ๆ
+   ความคืบหน้าอยู่แค่ในเมนูช่วยเหลือซึ่งต้องเปิดเข้าไปดูเอง คนกดจึงสรุปว่า "กดแล้วไม่ติด" (user เจอจริง)
+   แถบบน Dock เป็นที่มาตรฐานของ macOS: เห็นโดยไม่ต้องเปิดอะไร และไม่มีหน้าต่างมายืนขวาง
+   0.02 ขั้นต่ำ = ให้แถบโผล่ทันทีที่กด ไม่ใช่รอจนโหลดได้ก้อนแรก */
+let lastProgress = null;   // ตัวแจ้งสถานะยิงทุกก้อนที่โหลดได้ — ขยับแถบเฉพาะตอนเปอร์เซ็นต์เปลี่ยนจริง
+function setDockProgress(s) {
+  const w = owner();
+  if (!w) return;
+  const v = s.busy ? Math.max(0.02, (s.percent || 0) / 100) : -1;
+  if (v === lastProgress) return;
+  lastProgress = v;
+  try { w.setProgressBar(v); } catch {}
+}
+
 /** กล่องถาม — ขึ้นครั้งเดียวต่อหนึ่งเวอร์ชัน กด "ภายหลัง" แล้วไม่ตามตื๊อทุก 6 ชั่วโมง */
 async function askInstall({ auto = false } = {}) {
   const s = updater.snapshot();
@@ -690,7 +705,8 @@ async function askInstall({ auto = false } = {}) {
   const { response } = await msgBox({
     type: 'none',
     message: `Cobik ${s.latest} พร้อมให้อัปเดต`,
-    detail: `ตอนนี้ใช้ ${s.current} อยู่\n\nแอปจะปิดแล้วเปิดใหม่ให้เอง ใช้เวลาไม่กี่วินาที`
+    detail: `ตอนนี้ใช้ ${s.current} อยู่\n\nต้องโหลดตัวแอปใหม่ราว 200MB — ดูความคืบหน้าได้ที่แถบบนไอคอน Cobik ใน Dock`
+      + '\nระหว่างโหลดใช้งานต่อได้ตามปกติ พอโหลดเสร็จแอปจะปิดแล้วเปิดใหม่ให้เอง'
       + '\nบทสนทนาที่ค้างอยู่กับ Cobi จะเริ่มใหม่'
       // แอปยังเซ็นแบบ ad-hoc → macOS มองว่ารุ่นใหม่เป็นคนละแอป แล้วขอสิทธิ์ที่เคยให้ไว้ใหม่
       // (สิทธิ์ที่ให้ Cobi ไว้ไม่หาย — อันนั้นเก็บในไฟล์ของเราเอง)
@@ -733,6 +749,7 @@ updater.setNotifier(() => {
   const item = updateMenuItem();
   if (item.label !== menuLabel) { menuLabel = item.label; buildMenu(); }
   setDockBadge(s);
+  setDockProgress(s);
   if (s.error && s.error !== lastUpdError) { lastUpdError = s.error; updateFailed(s.error); }
   if (!s.error) lastUpdError = null;
   // เจอรุ่นใหม่ที่ยังไม่เคยบอก → ถามหนึ่งครั้ง แล้วปล่อยให้เมนูกับจุดบน Dock ทำหน้าที่ต่อ
